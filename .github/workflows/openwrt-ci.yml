@@ -6,25 +6,25 @@ on:
       REPO_URL:
         description: 'lede源码'
         required: true
-        default: 'https://github.com/coolsnowwolf/lede.git'
+        default: 'openwrt/openwrt'
         type: choice
         options:
-          - 'https://github.com/coolsnowwolf/lede.git'
-          - 'https://github.com/dd-ray/lede.git'
+          - 'openwrt/openwrt'
       REPO_BRANCH:
         description: 'lede源码'
         required: true
-        default: 'master'
+        default: 'main'
         type: choice
         options:
-          - 'master'
+          - 'main'
+          - 'openwrt-24.10'
       CCACHE:
         description: 'Enable ccache (Use Cache to speed up next build)'
         type: boolean
         default: true
 
 env:
-  REPO_URL: ${{ github.event.inputs.REPO_URL }}
+  REPO_URL: "https://github.com/${{ github.event.inputs.REPO_URL }}.git"
   REPO_BRANCH: ${{ github.event.inputs.REPO_BRANCH }}
   SOURCE_PATH: '/openwrt/openwrt-source'
   TZ: Asia/Shanghai
@@ -78,9 +78,9 @@ jobs:
       - name: Create release
         uses: ncipollo/release-action@v1.14.0
         with:
-          name: OpenWrt-${{ env.LATEST_RELEASE }}
+          name: OpenWrt-${{ env.REPO_BRANCH }}
           allowUpdates: true
-          tag: ${{ env.LATEST_RELEASE }}
+          tag: ${{ env.REPO_BRANCH }}
           commit: main
           replacesArtifacts: true
           artifacts: |
