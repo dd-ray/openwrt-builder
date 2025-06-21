@@ -22,3 +22,19 @@ sed -i 's/option mediaurlbase \/luci-static\/bootstrap/option mediaurlbase \"\/l
 git clone --depth 1 https://github.com/tty228/luci-app-wechatpush "${SOURCE_PATH}/package/new/luci-app-wechatpush"
 git clone --depth 1 https://github.com/nikkinikki-org/OpenWrt-nikki "${SOURCE_PATH}/package/new/openWrt-nikki"
 git clone --depth 1 https://github.com/vernesong/OpenClash "${SOURCE_PATH}/package/new/openWrt-OpenClash"
+
+# tcp-brutal
+git clone https://github.com/sbwml/package_kernel_tcp-brutal "${SOURCE_PATH}/package/kernel/tcp-brutal"
+
+
+# Theme
+git clone --depth 1 https://github.com/jerrykuku/luci-theme-argon "${SOURCE_PATH}/package/new/luci-theme-argon"
+git clone --depth 1 https://github.com/jerrykuku/luci-app-argon-config "${SOURCE_PATH}/package/new/luci-app-argon-config"
+
+sed -i '/<a href="https:\/\/github.com\/jerrykuku\/luci-theme-argon" target="_blank">ArgonTheme <%# vPKG_VERSION %><\/a> \//d' package/new/luci-theme-argon/luasrc/view/themes/argon/footer_login.htm
+sed -i '/<a href="https:\/\/github.com\/jerrykuku\/luci-theme-argon" target="_blank">ArgonTheme <%# vPKG_VERSION %><\/a> \//d' package/new/luci-theme-argon/luasrc/view/themes/argon/footer.htm
+
+# Mosdns
+rm -rf "${SOURCE_PATH}/feeds/packages/net/v2ray-geodata"
+git clone https://github.com/sbwml/luci-app-mosdns -b v5 "${SOURCE_PATH}/package/new/mosdns"
+git clone https://github.com/sbwml/v2ray-geodata "${SOURCE_PATH}/package/new/v2ray-geodata"
