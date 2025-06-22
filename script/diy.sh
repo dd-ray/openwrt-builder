@@ -38,3 +38,11 @@ sed -i '/<a href="https:\/\/github.com\/jerrykuku\/luci-theme-argon" target="_bl
 rm -rf "${SOURCE_PATH}/feeds/packages/net/v2ray-geodata"
 git clone https://github.com/sbwml/luci-app-mosdns -b v5 "${SOURCE_PATH}/package/new/mosdns"
 git clone https://github.com/sbwml/v2ray-geodata "${SOURCE_PATH}/package/new/v2ray-geodata"
+
+
+# 修复 rust bootstrap 在 CI 上强制要求 download-ci-llvm=if-unchanged
+CFG_FILES=$(grep -rl '^llvm.download-ci-llvm = true' \
+            "$SOURCE_PATH/feeds/packages/lang/rust")
+for f in $CFG_FILES; do
+  sed -i 's/^llvm.download-ci-llvm = true/llvm.download-ci-llvm = "if-unchanged"/' "$f"
+done

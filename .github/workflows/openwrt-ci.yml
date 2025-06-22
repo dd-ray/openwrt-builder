@@ -37,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        DEVICE: [ 'nanopi-r5s', 'cudy-tr3000','efused-wxy-oec' ]
+        DEVICE: [ 'nanopi-r5s', 'cudy-tr3000' ]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
