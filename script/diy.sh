@@ -41,6 +41,12 @@ git clone https://github.com/sbwml/v2ray-geodata "${SOURCE_PATH}/package/new/v2r
 
 
 # 修复 rust bootstrap 在 CI 上强制要求 download-ci-llvm=if-unchanged
+# 首先修补 rust 包 Makefile 中的 --set=llvm.download-ci-llvm=true
+MAKEFILE_PATH="$SOURCE_PATH/feeds/packages/lang/rust/Makefile"
+if [ -f "$MAKEFILE_PATH" ]; then
+  sed -i 's/--set=llvm.download-ci-llvm=true/--set=llvm.download-ci-llvm="if-unchanged"/g' "$MAKEFILE_PATH"
+fi
+
 CFG_FILES=$(grep -rl '^llvm.download-ci-llvm = true' \
             "$SOURCE_PATH/feeds/packages/lang/rust")
 for f in $CFG_FILES; do
