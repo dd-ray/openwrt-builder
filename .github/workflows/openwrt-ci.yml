@@ -47,6 +47,8 @@ jobs:
           build-mount-path: /openwrt
       - name: Build System Setup
         uses: dd-ray/github-actions@openwrt-build-setup
+      - name: Install LLVM
+        uses: dd-ray/github-actions@install-llvm
       - name: Clone OpenWrt
         run: ./script/tool.sh clone
       - name: Cache
