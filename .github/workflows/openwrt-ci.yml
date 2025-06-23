@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       REPO_URL:
-        description: 'lede源码'
+        description: 'OpenWrt仓库'
         required: true
         default: 'openwrt/openwrt'
         type: choice
         options:
           - 'openwrt/openwrt'
       REPO_BRANCH:
-        description: 'lede源码'
+        description: 'OpenWrt分支'
         required: true
         default: 'main'
         type: choice
