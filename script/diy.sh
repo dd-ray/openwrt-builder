@@ -40,15 +40,5 @@ git clone https://github.com/sbwml/luci-app-mosdns -b v5 "${SOURCE_PATH}/package
 git clone https://github.com/sbwml/v2ray-geodata "${SOURCE_PATH}/package/new/v2ray-geodata"
 
 
-# 修复 rust bootstrap 在 CI 上强制要求 download-ci-llvm=if-unchanged
-# 首先修补 rust 包 Makefile 中的 --set=llvm.download-ci-llvm=true
-MAKEFILE_PATH="$SOURCE_PATH/feeds/packages/lang/rust/Makefile"
-if [ -f "$MAKEFILE_PATH" ]; then
-  sed -i 's/--set=llvm.download-ci-llvm=true/--set=llvm.download-ci-llvm="if-unchanged"/g' "$MAKEFILE_PATH"
-fi
-
-CFG_FILES=$(grep -rl '^llvm.download-ci-llvm = true' \
-            "$SOURCE_PATH/feeds/packages/lang/rust")
-for f in $CFG_FILES; do
-  sed -i 's/^llvm.download-ci-llvm = true/llvm.download-ci-llvm = "if-unchanged"/' "$f"
-done
+# 修补 rust 包 Makefile 中的 --set=llvm.download-ci-llvm=true
+sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' "${SOURCE_PATH}/feeds/packages/lang/rust/Makefile"
