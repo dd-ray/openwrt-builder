@@ -44,7 +44,7 @@ function build_config() {
   cp -f "${BUILDER_PATH}/config/${CONFIG_FILE}" ".config"
   echo -e 'CONFIG_DEVEL=y\nCONFIG_CCACHE=y' >> .config
   chmod +x "${BUILDER_PATH}/script/diy.sh"
-  bash -c "${BUILDER_PATH}/script/diy.sh ${SOURCE_PATH}"
+  bash -c "${BUILDER_PATH}/script/diy.sh ${SOURCE_PATH} ${BUILDER_PATH}"
   du -h --max-depth=2 ./
   echo "当前配置=====start"
   cat '.config'
