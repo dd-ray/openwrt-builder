@@ -146,9 +146,16 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  #include <linux/netdevice.h>
  #include <linux/slab.h>
  #include <linux/export.h>
-@@ -162,6 +165,35 @@ static int __nf_conntrack_eventmask_repo
+@@ -125,6 +128,7 @@ static void ecache_work(struct work_stru
+ 	ecache_work_evict_list(&events);
+ }
+ 
++#ifndef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+ static int __nf_conntrack_eventmask_report(struct nf_conntrack_ecache *e,
+@@ -162,6 +168,36 @@ static int __nf_conntrack_eventmask_repo
  	return ret;
  }
++#endif
  
 +#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
 +int nf_conntrack_eventmask_report(unsigned int eventmask, struct nf_conn *ct,
