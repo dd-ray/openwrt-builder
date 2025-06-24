@@ -65,14 +65,12 @@ function use_shortcut_fe() {
 
 
     # kernel 6.12 patch for shortcut-fe
-    # fullcone
-    cp ${BUILDER_PATH}/openwrt/patch/kernel-6.12/net/952-net-conntrack-events-support-multiple-registrant.patch target/linux/generic/hack-6.12/952-net-conntrack-events-support-multiple-registrant.patch
     # bcm-fullcone
     cp ${BUILDER_PATH}/openwrt/patch/kernel-6.12/net/982-add-bcm-fullcone-support.patch target/linux/generic/hack-6.12/982-add-bcm-fullcone-support.patch
     cp ${BUILDER_PATH}/openwrt/patch/kernel-6.12/net/983-add-bcm-fullcone-nft_masq-support.patch target/linux/generic/hack-6.12/983-add-bcm-fullcone-nft_masq-support.patch
     # shortcut-fe
     cp ${BUILDER_PATH}/openwrt/patch/kernel-6.12/net/601-netfilter-export-udp_get_timeouts-function.patch target/linux/generic/hack-6.12/601-netfilter-export-udp_get_timeouts-function.patch
-    cp ${BUILDER_PATH}/openwrt/patch/kernel-6.12/net/953-net-patch-linux-kernel-to-support-shortcut-fe.patch target/linux/generic/hack-6.12/953-net-patch-linux-kernel-to-support-shortcut-fe.patch
+    cp ${BUILDER_PATH}/openwrt/patch/kernel-6.12/net/951-add-net-conntrack-events-support-shortcut-fe.patch target/linux/generic/hack-6.12/951-add-net-conntrack-events-support-shortcut-fe.patch
 }
 
 function use_mosdns() {

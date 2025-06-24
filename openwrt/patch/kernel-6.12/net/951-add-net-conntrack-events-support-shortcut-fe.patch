@@ -1,28 +1,33 @@
-From 986b513b5cc049e9a5f10c35b76f037dde8b8c3e Mon Sep 17 00:00:00 2001
-From: Zhi Chen <zhichen@codeaurora.org>
-Date: Tue, 13 Jan 2015 14:28:18 -0800
-Subject: [PATCH 1/2] net: conntrack events, support multiple registrant
-
-Merging this patch from kernel 3.4:
-This was supported by old (.28) kernel versions but removed
-because of it's overhead.
-But we need this feature for NA connection manager. Both ipv4
-and ipv6 modules needs to register themselves to ct events.
-
-Change-Id: Iebfb254590fb594f5baf232f849d1b7ae45ef757
-Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
----
- include/net/netfilter/nf_conntrack_ecache.h |  33 +++++--
- include/net/netns/conntrack.h               |   3 +
- net/netfilter/Kconfig                       |   8 ++
- net/netfilter/nf_conntrack_core.c           |   4 +
- net/netfilter/nf_conntrack_ecache.c         | 103 +++++++++++++++++++-
- net/netfilter/nf_conntrack_netlink.c        |  17 ++++
- 6 files changed, 160 insertions(+), 8 deletions(-)
-
---- a/include/net/netfilter/nf_conntrack_ecache.h
-+++ b/include/net/netfilter/nf_conntrack_ecache.h
-@@ -65,9 +65,14 @@ struct nf_ct_event_notifier {
+diff -Naur a/include/linux/if_bridge.h b/include/linux/if_bridge.h
+--- a/include/linux/if_bridge.h	2025-05-29 15:28:02.502417107 +0800
++++ b/include/linux/if_bridge.h	2025-05-29 15:34:41.775337712 +0800
+@@ -72,6 +72,9 @@
+ int br_ioctl_call(struct net *net, struct net_bridge *br, unsigned int cmd,
+ 		  struct ifreq *ifr, void __user *uarg);
+ 
++extern void br_dev_update_stats(struct net_device *dev,
++				struct rtnl_link_stats64 *nlstats);
++
+ #if IS_ENABLED(CONFIG_BRIDGE) && IS_ENABLED(CONFIG_BRIDGE_IGMP_SNOOPING)
+ int br_multicast_list_adjacent(struct net_device *dev,
+ 			       struct list_head *br_ip_list);
+diff -Naur a/include/linux/skbuff.h b/include/linux/skbuff.h
+--- a/include/linux/skbuff.h	2025-05-29 15:29:30.793949798 +0800
++++ b/include/linux/skbuff.h	2025-05-29 15:34:41.777337882 +0800
+@@ -1011,6 +1011,9 @@
+ 	__u8			csum_not_inet:1;
+ #endif
+ 	__u8			unreadable:1;
++#ifdef CONFIG_SHORTCUT_FE
++	__u8			fast_forwarded:1;
++#endif
+ #if defined(CONFIG_NET_SCHED) || defined(CONFIG_NET_XGRESS)
+ 	__u16			tc_index;	/* traffic control index */
+ #endif
+diff -Naur a/include/net/netfilter/nf_conntrack_ecache.h b/include/net/netfilter/nf_conntrack_ecache.h
+--- a/include/net/netfilter/nf_conntrack_ecache.h	2025-05-22 20:29:54.000000000 +0800
++++ b/include/net/netfilter/nf_conntrack_ecache.h	2025-05-29 15:34:41.777337882 +0800
+@@ -65,9 +65,16 @@
  	int (*exp_event)(unsigned int events, const struct nf_exp_event *item);
  };
  
@@ -30,6 +35,8 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
 +#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
 +extern int nf_conntrack_register_notifier(struct net *net, struct notifier_block *nb);
 +extern int nf_conntrack_unregister_notifier(struct net *net, struct notifier_block *nb);
++extern int nf_conntrack_register_chain_notifier(struct net *net, struct notifier_block *nb);
++extern int nf_conntrack_unregister_chain_notifier(struct net *net, struct notifier_block *nb);
 +#else
 +int nf_conntrack_register_notifier(struct net *net,
  				   const struct nf_ct_event_notifier *nb);
@@ -38,7 +45,7 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  
  void nf_ct_deliver_cached_events(struct nf_conn *ct);
  int nf_conntrack_eventmask_report(unsigned int eventmask, struct nf_conn *ct,
-@@ -98,11 +103,13 @@ static inline void
+@@ -98,11 +105,13 @@
  nf_conntrack_event_cache(enum ip_conntrack_events event, struct nf_conn *ct)
  {
  #ifdef CONFIG_NF_CONNTRACK_EVENTS
@@ -53,7 +60,7 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  
  	e = nf_ct_ecache_find(ct);
  	if (e == NULL)
-@@ -117,20 +124,34 @@ nf_conntrack_event_report(enum ip_conntr
+@@ -117,20 +126,34 @@
  			  u32 portid, int report)
  {
  #ifdef CONFIG_NF_CONNTRACK_EVENTS
@@ -92,9 +99,10 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  }
  
  #ifdef CONFIG_NF_CONNTRACK_EVENTS
---- a/include/net/netns/conntrack.h
-+++ b/include/net/netns/conntrack.h
-@@ -104,6 +104,9 @@ struct netns_ct {
+diff -Naur a/include/net/netns/conntrack.h b/include/net/netns/conntrack.h
+--- a/include/net/netns/conntrack.h	2025-05-29 15:30:42.737052067 +0800
++++ b/include/net/netns/conntrack.h	2025-05-29 15:34:22.156672240 +0800
+@@ -105,6 +105,9 @@
  	u8			sysctl_checksum;
  
  	struct ip_conntrack_stat __percpu *stat;
@@ -104,9 +112,116 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  	struct nf_ct_event_notifier __rcu *nf_conntrack_event_cb;
  	struct nf_ip_net	nf_ct_proto;
  #if defined(CONFIG_NF_CONNTRACK_LABELS)
---- a/net/netfilter/Kconfig
-+++ b/net/netfilter/Kconfig
-@@ -164,6 +164,14 @@ config NF_CONNTRACK_EVENTS
+diff -Naur a/net/bridge/br_if.c b/net/bridge/br_if.c
+--- a/net/bridge/br_if.c	2025-05-22 20:29:54.000000000 +0800
++++ b/net/bridge/br_if.c	2025-05-29 15:34:41.778337966 +0800
+@@ -764,6 +764,28 @@
+ 		br_recalculate_neigh_suppress_enabled(br);
+ }
+ 
++void br_dev_update_stats(struct net_device *dev,
++			 struct rtnl_link_stats64 *nlstats)
++{
++	
++	struct pcpu_sw_netstats *stats;
++
++	/* Is this a bridge? */
++	if (!(dev->priv_flags & IFF_EBRIDGE))
++		return;
++
++	
++	stats = this_cpu_ptr(dev->tstats);
++
++	u64_stats_update_begin(&stats->syncp);
++	u64_stats_add(&stats->rx_packets, nlstats->rx_packets);
++	u64_stats_add(&stats->rx_bytes, nlstats->rx_bytes);
++	u64_stats_add(&stats->tx_packets, nlstats->tx_packets);
++	u64_stats_add(&stats->tx_bytes, nlstats->tx_bytes);
++	u64_stats_update_end(&stats->syncp);
++}
++EXPORT_SYMBOL_GPL(br_dev_update_stats);
++
+ bool br_port_flag_is_set(const struct net_device *dev, unsigned long flag)
+ {
+ 	struct net_bridge_port *p;
+diff -Naur a/net/core/dev.c b/net/core/dev.c
+--- a/net/core/dev.c	2025-05-29 15:29:30.795949968 +0800
++++ b/net/core/dev.c	2025-05-29 15:34:41.781338221 +0800
+@@ -3642,9 +3642,17 @@
+ {
+ 	unsigned int len;
+ 	int rc;
+-
++#ifdef CONFIG_SHORTCUT_FE
++	/* If this skb has been fast forwarded then we don't want it to
++	 * go to any taps (by definition we're trying to bypass them).
++	 */
++	if (!skb->fast_forwarded) {
++#endif
+ 	if (dev_nit_active(dev))
+ 		dev_queue_xmit_nit(skb, dev);
++#ifdef CONFIG_SHORTCUT_FE
++	}
++#endif
+ 
+ #ifdef CONFIG_ETHERNET_PACKET_MANGLE
+ 	if (dev->eth_mangle_tx && !(skb = dev->eth_mangle_tx(dev, skb)))
+@@ -5493,6 +5501,11 @@
+ }
+ EXPORT_SYMBOL_GPL(netdev_rx_handler_unregister);
+ 
++#ifdef CONFIG_SHORTCUT_FE
++int (*athrs_fast_nat_recv)(struct sk_buff *skb) __rcu __read_mostly;
++EXPORT_SYMBOL_GPL(athrs_fast_nat_recv);
++#endif
++
+ /*
+  * Limit the use of PFMEMALLOC reserves to those protocols that implement
+  * the special handling of PFMEMALLOC skbs.
+@@ -5541,6 +5554,10 @@
+ 	int ret = NET_RX_DROP;
+ 	__be16 type;
+ 
++#ifdef CONFIG_SHORTCUT_FE
++	int (*fast_recv)(struct sk_buff *skb);
++#endif
++
+ 	net_timestamp_check(!READ_ONCE(net_hotdata.tstamp_prequeue), skb);
+ 
+ 	trace_netif_receive_skb(skb);
+@@ -5579,6 +5596,15 @@
+ 			goto out;
+ 	}
+ 
++#ifdef CONFIG_SHORTCUT_FE
++	fast_recv = rcu_dereference(athrs_fast_nat_recv);
++	if (fast_recv) {
++		if (fast_recv(skb)) {
++			ret = NET_RX_SUCCESS;
++			goto out;
++		}
++	}
++#endif
+ 	if (skb_skip_tc_classify(skb))
+ 		goto skip_classify;
+ 
+diff -Naur a/net/Kconfig b/net/Kconfig
+--- a/net/Kconfig	2025-05-29 15:29:30.809951155 +0800
++++ b/net/Kconfig	2025-05-29 15:34:41.778337966 +0800
+@@ -521,6 +521,9 @@
+ 	  migration of VMs with direct attached VFs by failing over to the
+ 	  paravirtual datapath when the VF is unplugged.
+ 
++config SHORTCUT_FE
++	bool "Enables kernel network stack path for Shortcut  Forwarding Engine"
++
+ config ETHTOOL_NETLINK
+ 	bool "Netlink interface for ethtool"
+ 	select DIMLIB
+diff -Naur a/net/netfilter/Kconfig b/net/netfilter/Kconfig
+--- a/net/netfilter/Kconfig	2025-05-29 15:29:30.782948865 +0800
++++ b/net/netfilter/Kconfig	2025-05-29 15:34:22.157672325 +0800
+@@ -164,6 +164,14 @@
  
  	  If unsure, say `N'.
  
@@ -121,9 +236,10 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  config NF_CONNTRACK_TIMEOUT
  	bool  'Connection tracking timeout'
  	depends on NETFILTER_ADVANCED
---- a/net/netfilter/nf_conntrack_core.c
-+++ b/net/netfilter/nf_conntrack_core.c
-@@ -2753,6 +2753,10 @@ int nf_conntrack_init_net(struct net *ne
+diff -Naur a/net/netfilter/nf_conntrack_core.c b/net/netfilter/nf_conntrack_core.c
+--- a/net/netfilter/nf_conntrack_core.c	2025-05-29 15:29:30.788949374 +0800
++++ b/net/netfilter/nf_conntrack_core.c	2025-05-29 15:34:22.157672325 +0800
+@@ -2753,6 +2753,10 @@
  	nf_conntrack_ecache_pernet_init(net);
  	nf_conntrack_proto_pernet_init(net);
  
@@ -134,8 +250,9 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  	return 0;
  
  err_expect:
---- a/net/netfilter/nf_conntrack_ecache.c
-+++ b/net/netfilter/nf_conntrack_ecache.c
+diff -Naur a/net/netfilter/nf_conntrack_ecache.c b/net/netfilter/nf_conntrack_ecache.c
+--- a/net/netfilter/nf_conntrack_ecache.c	2025-05-22 20:29:54.000000000 +0800
++++ b/net/netfilter/nf_conntrack_ecache.c	2025-05-29 15:37:45.232916427 +0800
 @@ -17,6 +17,9 @@
  #include <linux/stddef.h>
  #include <linux/err.h>
@@ -146,10 +263,46 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  #include <linux/netdevice.h>
  #include <linux/slab.h>
  #include <linux/export.h>
-@@ -162,6 +165,35 @@ static int __nf_conntrack_eventmask_repo
- 	return ret;
+@@ -124,6 +127,7 @@
+ 		schedule_delayed_work(&cnet->ecache.dwork, delay);
  }
  
++#ifndef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+ static int __nf_conntrack_eventmask_report(struct nf_conntrack_ecache *e,
+ 					   const u32 events,
+ 					   const u32 missed,
+@@ -140,12 +144,23 @@
+ 	rcu_read_lock();
+ 
+ 	notify = rcu_dereference(net->ct.nf_conntrack_event_cb);
+-	if (!notify) {
++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
++	if (!notify && !rcu_dereference_raw(net->ct.nf_conntrack_chain.head))
++#else
++	if (!notify) 
++#endif
++	{
+ 		rcu_read_unlock();
+ 		return 0;
+ 	}
+-
++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
++		ret = atomic_notifier_call_chain(&net->ct.nf_conntrack_chain,
++			events | missed, &item);
++		if (notify)
++			ret = notify->ct_event(events | missed, item);
++#else
+ 	ret = notify->ct_event(events | missed, item);
++#endif
+ 	rcu_read_unlock();
+ 
+ 	if (likely(ret >= 0 && missed == 0))
+@@ -161,7 +176,37 @@
+ 
+ 	return ret;
+ }
++#endif
++
 +#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
 +int nf_conntrack_eventmask_report(unsigned int eventmask, struct nf_conn *ct,
 +				  u32 portid, int report)
@@ -172,7 +325,7 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
 +
 +		if (!((eventmask | missed) & e->ctmask))
 +			return 0;
-+
+ 
 +		atomic_notifier_call_chain(&net->ct.nf_conntrack_chain, eventmask | missed, &item);
 +	}
 +
@@ -182,7 +335,7 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  int nf_conntrack_eventmask_report(unsigned int events, struct nf_conn *ct,
  				  u32 portid, int report)
  {
-@@ -197,10 +229,52 @@ int nf_conntrack_eventmask_report(unsign
+@@ -197,10 +242,52 @@
  
  	return ret;
  }
@@ -235,7 +388,7 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  void nf_ct_deliver_cached_events(struct nf_conn *ct)
  {
  	struct nf_conntrack_ecache *e;
-@@ -226,6 +300,7 @@ void nf_ct_deliver_cached_events(struct
+@@ -226,6 +313,7 @@
  	 */
  	__nf_conntrack_eventmask_report(e, events, e->missed, &item);
  }
@@ -243,7 +396,7 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  EXPORT_SYMBOL_GPL(nf_ct_deliver_cached_events);
  
  void nf_ct_expect_event_report(enum ip_conntrack_expect_events event,
-@@ -258,20 +333,43 @@ out_unlock:
+@@ -258,20 +346,53 @@
  	rcu_read_unlock();
  }
  
@@ -254,6 +407,11 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
 +{
 +	return atomic_notifier_chain_register(&net->ct.nf_conntrack_chain, nb);
 +}
++int nf_conntrack_register_chain_notifier(struct net *net, struct notifier_block *nb)
++{
++	return atomic_notifier_chain_register(&net->ct.nf_conntrack_chain, nb);
++}
++EXPORT_SYMBOL_GPL(nf_conntrack_register_chain_notifier);
 +#else
 +int nf_conntrack_register_notifier(struct net *net,
  				    const struct nf_ct_event_notifier *new)
@@ -285,11 +443,16 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
 +{
 +	return atomic_notifier_chain_unregister(&net->ct.nf_conntrack_chain, nb);
 +}
++int nf_conntrack_unregister_chain_notifier(struct net *net, struct notifier_block *nb)
++{
++	return atomic_notifier_chain_unregister(&net->ct.nf_conntrack_chain, nb);
++}
++EXPORT_SYMBOL_GPL(nf_conntrack_unregister_chain_notifier);
 +#else
  void nf_conntrack_unregister_notifier(struct net *net)
  {
  	mutex_lock(&nf_ct_ecache_mutex);
-@@ -279,6 +377,7 @@ void nf_conntrack_unregister_notifier(st
+@@ -279,6 +400,7 @@
  	mutex_unlock(&nf_ct_ecache_mutex);
  	/* synchronize_rcu() is called after netns pre_exit */
  }
@@ -297,9 +460,10 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  EXPORT_SYMBOL_GPL(nf_conntrack_unregister_notifier);
  
  void nf_conntrack_ecache_work(struct net *net, enum nf_ct_ecache_state state)
---- a/net/netfilter/nf_conntrack_netlink.c
-+++ b/net/netfilter/nf_conntrack_netlink.c
-@@ -721,12 +721,19 @@ static size_t ctnetlink_nlmsg_size(const
+diff -Naur a/net/netfilter/nf_conntrack_netlink.c b/net/netfilter/nf_conntrack_netlink.c
+--- a/net/netfilter/nf_conntrack_netlink.c	2025-05-22 20:29:54.000000000 +0800
++++ b/net/netfilter/nf_conntrack_netlink.c	2025-05-29 15:39:36.054330874 +0800
+@@ -721,12 +721,19 @@
  }
  
  static int
@@ -319,7 +483,24 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  	struct nf_conn *ct = item->ct;
  	struct sk_buff *skb;
  	unsigned int type;
-@@ -3754,11 +3761,17 @@ static int ctnetlink_stat_exp_cpu(struct
+@@ -3095,6 +3102,7 @@
+ }
+ 
+ #ifdef CONFIG_NF_CONNTRACK_EVENTS
++#ifndef  CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+ static int
+ ctnetlink_expect_event(unsigned int events, const struct nf_exp_event *item)
+ {
+@@ -3144,6 +3152,8 @@
+ 	return 0;
+ }
+ #endif
++#endif
++
+ static int ctnetlink_exp_done(struct netlink_callback *cb)
+ {
+ 	if (cb->args[1])
+@@ -3754,11 +3764,17 @@
  }
  
  #ifdef CONFIG_NF_CONNTRACK_EVENTS
@@ -337,7 +518,7 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  
  static const struct nfnl_callback ctnl_cb[IPCTNL_MSG_MAX] = {
  	[IPCTNL_MSG_CT_NEW]	= {
-@@ -3857,8 +3870,12 @@ static int __net_init ctnetlink_net_init
+@@ -3857,8 +3873,12 @@
  static void ctnetlink_net_pre_exit(struct net *net)
  {
  #ifdef CONFIG_NF_CONNTRACK_EVENTS
