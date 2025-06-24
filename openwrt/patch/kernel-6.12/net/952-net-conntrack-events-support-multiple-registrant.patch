@@ -16,7 +16,7 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  include/net/netns/conntrack.h               |   3 +
  net/netfilter/Kconfig                       |   8 ++
  net/netfilter/nf_conntrack_core.c           |   4 +
- net/netfilter/nf_conntrack_ecache.c         | 106 +++++++++++++++++++-
+ net/netfilter/nf_conntrack_ecache.c         | 103 +++++++++++++++++++-
  net/netfilter/nf_conntrack_netlink.c        |  17 ++++
  6 files changed, 160 insertions(+), 8 deletions(-)
 
@@ -146,29 +146,17 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  #include <linux/netdevice.h>
  #include <linux/slab.h>
  #include <linux/export.h>
-@@ -123,7 +126,8 @@
- 	if (delay >= 0)
- 		schedule_delayed_work(&cnet->ecache.dwork, delay);
- }
--
-+#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
-+#else
- static int __nf_conntrack_eventmask_report(struct nf_conntrack_ecache *e,
- 					   const u32 events,
- 					   const u32 missed,
-@@ -161,7 +165,37 @@
- 
+@@ -162,6 +165,35 @@ static int __nf_conntrack_eventmask_repo
  	return ret;
  }
-+#endif
-+
+ 
 +#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
 +int nf_conntrack_eventmask_report(unsigned int eventmask, struct nf_conn *ct,
 +				  u32 portid, int report)
 +{
 +	struct nf_conntrack_ecache *e;
 +	struct net *net = nf_ct_net(ct);
- 
++
 +	e = nf_ct_ecache_find(ct);
 +	if (e == NULL)
 +		return 0;
@@ -194,7 +182,7 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  int nf_conntrack_eventmask_report(unsigned int events, struct nf_conn *ct,
  				  u32 portid, int report)
  {
-@@ -197,10 +231,52 @@
+@@ -197,10 +229,52 @@ int nf_conntrack_eventmask_report(unsign
  
  	return ret;
  }
@@ -247,7 +235,7 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  void nf_ct_deliver_cached_events(struct nf_conn *ct)
  {
  	struct nf_conntrack_ecache *e;
-@@ -226,6 +302,7 @@
+@@ -226,6 +300,7 @@ void nf_ct_deliver_cached_events(struct
  	 */
  	__nf_conntrack_eventmask_report(e, events, e->missed, &item);
  }
@@ -255,7 +243,7 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  EXPORT_SYMBOL_GPL(nf_ct_deliver_cached_events);
  
  void nf_ct_expect_event_report(enum ip_conntrack_expect_events event,
-@@ -258,20 +335,43 @@
+@@ -258,20 +333,43 @@ out_unlock:
  	rcu_read_unlock();
  }
  
@@ -301,7 +289,7 @@ Signed-off-by: Zhi Chen <zhichen@codeaurora.org>
  void nf_conntrack_unregister_notifier(struct net *net)
  {
  	mutex_lock(&nf_ct_ecache_mutex);
-@@ -279,6 +379,7 @@
+@@ -279,6 +377,7 @@ void nf_conntrack_unregister_notifier(st
  	mutex_unlock(&nf_ct_ecache_mutex);
  	/* synchronize_rcu() is called after netns pre_exit */
  }
