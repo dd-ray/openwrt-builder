@@ -166,7 +166,7 @@ apply_config() {
     # 运行自定义脚本
     if [ -f "${BUILDER_PATH}/script/diy.sh" ]; then
         print_info "运行自定义脚本..."
-        chmod +x "${BUILDER_PATH}/script/diy.sh"
+        #chmod +x "${BUILDER_PATH}/script/diy.sh"
         bash -c "${BUILDER_PATH}/script/diy.sh ${SOURCE_PATH} ${BUILDER_PATH}"
         print_success "自定义脚本运行完成"
     fi
