@@ -10,6 +10,7 @@ on:
         type: choice
         options:
           - 'openwrt/openwrt'
+          - 'Lienol/openwrt'
       REPO_BRANCH:
         description: 'OpenWrt分支'
         required: true
@@ -17,7 +18,8 @@ on:
         type: choice
         options:
           - 'main'
-          - 'openwrt-24.10'
+          - '24.10'
+           - 'openwrt-24.10'
       CCACHE:
         description: 'Enable ccache (Use Cache to speed up next build)'
         type: boolean
