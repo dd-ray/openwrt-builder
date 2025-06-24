@@ -171,3 +171,5 @@ CONFIG_NGINX_HTTP_REAL_IP=y
 CONFIG_NGINX_HTTP_SUB=y
 CONFIG_NGINX_STREAM_REAL_IP=y
 CONFIG_PACKAGE_kmod-nft-fullcone=y
+
+CONFIG_KERNEL_CFLAGS_EXTRA="-Wno-unused-function -Wno-error=unused-function"
