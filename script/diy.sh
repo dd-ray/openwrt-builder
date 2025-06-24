@@ -112,5 +112,5 @@ git clone https://github.com/sbwml/v2ray-geodata package/new/v2ray-geodata
 
 # 修补 rust 包 Makefile 中的 --set=llvm.download-ci-llvm=true
 sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' feeds/packages/lang/rust/Makefile
-use_shortcut_fe
+#use_shortcut_fe
 popd
