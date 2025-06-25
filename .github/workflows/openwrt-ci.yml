@@ -37,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        DEVICE: [ 'nanopi-r5s', 'cudy-tr3000' ]
+        DEVICE: [ 'nanopi-r5s', 'cudy-tr3000' ,'x86_64' ]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
