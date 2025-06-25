@@ -41,13 +41,14 @@ function update_feeds() {
 
 function build_config() {
   cd "$SOURCE_PATH" || exit 1
-  cp -f "${BUILDER_PATH}/config/${CONFIG_FILE}" ".config"
+  cat "${BUILDER_PATH}/config/common.seed" > .config
+  cat "${BUILDER_PATH}/config/${CONFIG_FILE}" >> .config
   echo -e 'CONFIG_DEVEL=y\nCONFIG_CCACHE=y' >> .config
   chmod +x "${BUILDER_PATH}/script/diy.sh"
   bash -c "${BUILDER_PATH}/script/diy.sh ${SOURCE_PATH} ${BUILDER_PATH}"
   du -h --max-depth=2 ./
   echo "当前配置=====start"
-  cat '.config'
+  cat .config
   echo "当前配置=====end"
 }
 
