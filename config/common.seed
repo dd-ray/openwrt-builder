@@ -277,6 +277,7 @@ CONFIG_PACKAGE_natflow=m
 # SFE
 CONFIG_PACKAGE_kmod-fast-classifier=y
 CONFIG_PACKAGE_kmod-shortcut-fe=y
+CONFIG_PACKAGE_kmod-shortcut-fe-cm=y
 
 CONFIG_PACKAGE_iperf3=y
 CONFIG_PACKAGE_jq=y
