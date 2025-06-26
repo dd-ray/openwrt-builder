@@ -74,6 +74,13 @@ function use_shortcut_fe() {
     cp ${BUILDER_PATH}/openwrt/patch/kernel-6.12/net/613-netfilter_optional_tcp_window_check.patch target/linux/generic/pending-6.12/951-add-net-conntrack-events-support-shortcut-fe.patch
 }
 
+function use_turboacc() {
+    pushd $SOURCE_PATH
+    # 支持 turboacc 带 shortcut-fe
+    curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh --sfe
+    popd
+}
+
 function use_mosdns() {
     # Mosdns
     rm -rf "feeds/packages/net/v2ray-geodata"
@@ -113,5 +120,5 @@ git clone https://github.com/sbwml/v2ray-geodata package/new/v2ray-geodata
 
 # 修补 rust 包 Makefile 中的 --set=llvm.download-ci-llvm=true
 sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' feeds/packages/lang/rust/Makefile
-use_shortcut_fe
+use_turboacc
 popd
