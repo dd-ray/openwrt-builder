@@ -77,7 +77,7 @@ function use_shortcut_fe() {
 function use_turboacc() {
     pushd $SOURCE_PATH
     # 支持 turboacc 带 shortcut-fe
-    curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh --sfe
+    curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh
     popd
 }
 
