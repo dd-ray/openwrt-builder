@@ -73,42 +73,64 @@ jobs:
       - name: Download toolchain from release
         if: ${{ github.event.inputs.CCACHE == 'true' }}
         run: |
-          TOOLCHAIN_RELEASE="toolchain-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}"
+          TOOLCHAIN_RELEASE="toolchain"
           TOOLCHAIN_FILE="toolchain-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}.tar.gz"
+          TOOLCHAIN_URL="https://github.com/${{ github.repository }}/releases/download/${TOOLCHAIN_RELEASE}/${TOOLCHAIN_FILE}"
           
-          echo "🔍 Checking for toolchain release: ${TOOLCHAIN_RELEASE}"
+          echo "🔍 Checking for toolchain file: ${TOOLCHAIN_FILE}"
           echo "📋 Toolchain type: ${{ env.TOOLCHAIN_TYPE }}"
-          if wget -q --spider "https://github.com/${{ github.repository }}/releases/download/${TOOLCHAIN_RELEASE}/${TOOLCHAIN_FILE}"; then
+          echo "📍 URL: ${TOOLCHAIN_URL}"
+          
+          if wget -q --spider "${TOOLCHAIN_URL}"; then
             echo "📥 Downloading toolchain from release..."
-            wget -q "https://github.com/${{ github.repository }}/releases/download/${TOOLCHAIN_RELEASE}/${TOOLCHAIN_FILE}"
-            cd "$SOURCE_PATH" || exit 1
-            echo "📦 Extracting toolchain..."
-            tar -xzf "../${TOOLCHAIN_FILE}"
-            cd ..
-            rm -f "${TOOLCHAIN_FILE}"
-            echo "✅ Toolchain restored from release"
+            if wget -q "${TOOLCHAIN_URL}"; then
+              cd "$SOURCE_PATH" || exit 1
+              echo "📦 Extracting toolchain..."
+              if tar -xzf "../${TOOLCHAIN_FILE}"; then
+                echo "✅ Toolchain restored from release"
+              else
+                echo "⚠️ Failed to extract toolchain, will build from scratch"
+              fi
+              cd ..
+              rm -f "${TOOLCHAIN_FILE}"
+            else
+              echo "⚠️ Failed to download toolchain, will build from scratch"
+            fi
           else
-            echo "⚠️ No toolchain release found for ${{ env.TOOLCHAIN_TYPE }}, will build from scratch"
+            echo "⚠️ No toolchain file found: ${TOOLCHAIN_FILE}, will build from scratch"
+            echo "💡 可用的toolchain文件:"
+            gh release view toolchain --json assets | jq -r '.assets[].name' | grep "toolchain-" || echo "No toolchain files found"
           fi
 
       - name: Download ccache from release
         if: ${{ github.event.inputs.CCACHE == 'true' }}
         run: |
-          CCACHE_RELEASE="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
+          CCACHE_RELEASE="ccache"
           CCACHE_FILE="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}.tar.gz"
+          CCACHE_URL="https://github.com/${{ github.repository }}/releases/download/${CCACHE_RELEASE}/${CCACHE_FILE}"
           
-          echo "🔍 Checking for ccache release: ${CCACHE_RELEASE}"
-          if wget -q --spider "https://github.com/${{ github.repository }}/releases/download/${CCACHE_RELEASE}/${CCACHE_FILE}"; then
+          echo "🔍 Checking for ccache file: ${CCACHE_FILE}"
+          echo "📍 URL: ${CCACHE_URL}"
+          
+          if wget -q --spider "${CCACHE_URL}"; then
             echo "📥 Downloading ccache from release..."
-            wget -q "https://github.com/${{ github.repository }}/releases/download/${CCACHE_RELEASE}/${CCACHE_FILE}"
-            cd "$SOURCE_PATH" || exit 1
-            echo "📦 Extracting ccache..."
-            tar -xzf "../${CCACHE_FILE}" || echo "⚠️ Failed to extract ccache, will start fresh"
-            cd ..
-            rm -f "${CCACHE_FILE}"
-            echo "✅ CCache restored from release"
+            if wget -q "${CCACHE_URL}"; then
+              cd "$SOURCE_PATH" || exit 1
+              echo "📦 Extracting ccache..."
+              if tar -xzf "../${CCACHE_FILE}"; then
+                echo "✅ CCache restored from release"
+              else
+                echo "⚠️ Failed to extract ccache, will start fresh"
+              fi
+              cd ..
+              rm -f "${CCACHE_FILE}"
+            else
+              echo "⚠️ Failed to download ccache, will start fresh"
+            fi
           else
-            echo "⚠️ No ccache release found, will start fresh"
+            echo "⚠️ No ccache file found: ${CCACHE_FILE}, will start fresh"
+            echo "💡 可用的ccache文件:"
+            gh release view ccache --json assets | jq -r '.assets[].name' | grep "ccache-" || echo "No ccache files found"
           fi
 
       - name: Generate cache key
@@ -200,18 +222,40 @@ jobs:
         if: ${{ github.event.inputs.CCACHE == 'true' && env.SHOULD_UPDATE_CCACHE == 'true' }}
         uses: ncipollo/release-action@v1.14.0
         with:
-          name: "CCache ${{ env.REPO_BRANCH }} ${{ env.DEVICE_PLATFORM }}"
+          name: "OpenWrt CCache"
           allowUpdates: true
-          tag: "ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
+          tag: "ccache"
           commit: main
-          replacesArtifacts: true
+          replacesArtifacts: false
           body: |
-            ## 🚀 OpenWrt CCache (Auto Updated)
+            ## 🚀 OpenWrt CCache 编译缓存集合 (Auto Updated)
             
+            这个release包含所有分支和架构的OpenWrt ccache文件，由构建流程自动更新。
+            
+            ### 📋 可用的CCache文件
+            
+            #### Main分支
+            - `ccache-main-arm64.tar.gz` - 适用于 ARM64 设备 (nanopi-r5s, cudy-tr3000)
+            - `ccache-main-amd64.tar.gz` - 适用于 x86_64 设备
+            
+            #### OpenWrt-24.10分支
+            - `ccache-openwrt-24.10-arm64.tar.gz`
+            - `ccache-openwrt-24.10-amd64.tar.gz`
+            
+            ### 🔧 使用方法
+            ```bash
+            # 下载对应架构的ccache文件
+            wget https://github.com/${{ github.repository }}/releases/download/ccache/ccache-{分支}-{架构}.tar.gz
+            
+            # 解压到OpenWrt源码目录
+            tar -xzf ccache-{分支}-{架构}.tar.gz -C /path/to/openwrt/source/
+            ```
+            
+            ### 📝 最后更新
+            - **时间**: ${{ github.run_id }}
             - **分支**: ${{ env.REPO_BRANCH }}
             - **架构**: ${{ env.DEVICE_PLATFORM }}
             - **设备**: ${{ matrix.DEVICE }}
-            - **更新时间**: ${{ github.run_id }}
             - **构建类型**: 自动更新
             
             > 此ccache由构建流程自动更新，包含最新的编译缓存数据

@@ -79,13 +79,22 @@ jobs:
         if: ${{ github.event.inputs.FORCE_REBUILD != 'true' }}
         id: check_toolchain
         run: |
-          RELEASE_TAG="toolchain-${{ env.REPO_BRANCH }}-${{ matrix.TOOLCHAIN_TYPE }}"
+          RELEASE_TAG="toolchain"
+          TOOLCHAIN_FILE="toolchain-${{ env.REPO_BRANCH }}-${{ matrix.TOOLCHAIN_TYPE }}.tar.gz"
+          
+          # 检查固定的toolchain release是否存在，以及是否包含对应的toolchain文件
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "🔍 Toolchain release already exists: $RELEASE_TAG"
+            # 检查具体的toolchain文件是否存在
+            if gh release view "$RELEASE_TAG" --json assets | jq -e ".assets[] | select(.name == \"$TOOLCHAIN_FILE\")" >/dev/null 2>&1; then
+              echo "exists=true" >> $GITHUB_OUTPUT
+              echo "🔍 Toolchain file already exists: $TOOLCHAIN_FILE in release $RELEASE_TAG"
+            else
+              echo "exists=false" >> $GITHUB_OUTPUT
+              echo "🚀 Need to build toolchain: $TOOLCHAIN_FILE (release exists but file missing)"
+            fi
           else
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "🚀 Need to build toolchain: $RELEASE_TAG"
+            echo "🚀 Need to create toolchain release and build: $TOOLCHAIN_FILE"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -177,28 +186,39 @@ jobs:
         if: steps.check_toolchain.outputs.exists != 'true'
         uses: ncipollo/release-action@v1.14.0
         with:
-          name: "Toolchain ${{ env.REPO_BRANCH }} ${{ matrix.TOOLCHAIN_TYPE }}"
+          name: "OpenWrt Toolchains"
           allowUpdates: true
-          tag: "toolchain-${{ env.REPO_BRANCH }}-${{ matrix.TOOLCHAIN_TYPE }}"
+          tag: "toolchain"
           commit: main
-          replacesArtifacts: true
+          replacesArtifacts: false
           body: |
-            ## 🛠️ OpenWrt Toolchain
+            ## 🛠️ OpenWrt Toolchains 工具链集合
             
-            - **分支**: ${{ env.REPO_BRANCH }}
-            - **Toolchain类型**: ${{ matrix.TOOLCHAIN_TYPE }}
-            - **架构**: ${{ matrix.DEVICE_PLATFORM }}
-            - **代表设备**: ${{ matrix.DEVICE }}
-            - **构建时间**: ${{ github.run_id }}
+            这个release包含所有分支和架构的OpenWrt toolchain文件。
             
-            ### 兼容设备
-            此toolchain适用于使用 `${{ matrix.TOOLCHAIN_TYPE }}` 工具链的所有设备。
+            ### 📋 可用的Toolchain文件
             
-            ### 使用方法
+            #### Main分支
+            - `toolchain-main-aarch64_cortex-a53.tar.gz` - 适用于 nanopi-r5s 等 Cortex-A53 设备
+            - `toolchain-main-aarch64_generic.tar.gz` - 适用于 cudy-tr3000 等通用 aarch64 设备  
+            - `toolchain-main-x86_64.tar.gz` - 适用于 x86_64 设备
+            
+            #### OpenWrt-24.10分支  
+            - `toolchain-openwrt-24.10-aarch64_cortex-a53.tar.gz`
+            - `toolchain-openwrt-24.10-aarch64_generic.tar.gz`
+            - `toolchain-openwrt-24.10-x86_64.tar.gz`
+            
+            ### 🔧 使用方法
             ```bash
-            # 下载并解压toolchain
-            wget https://github.com/${{ github.repository }}/releases/download/toolchain-${{ env.REPO_BRANCH }}-${{ matrix.TOOLCHAIN_TYPE }}/${{ env.TOOLCHAIN_FILE }}
-            tar -xzf ${{ env.TOOLCHAIN_FILE }} -C /path/to/openwrt/source/
+            # 下载对应的toolchain文件
+            wget https://github.com/${{ github.repository }}/releases/download/toolchain/toolchain-{分支}-{类型}.tar.gz
+            
+            # 解压到OpenWrt源码目录
+            tar -xzf toolchain-{分支}-{类型}.tar.gz -C /path/to/openwrt/source/
             ```
+            
+            ### 📝 最后更新
+            - **时间**: ${{ github.run_id }}
+            - **构建项**: ${{ matrix.TOOLCHAIN_TYPE }} (${{ env.REPO_BRANCH }})
           artifacts: |
             ${{ env.SOURCE_PATH }}/${{ env.TOOLCHAIN_FILE }} 

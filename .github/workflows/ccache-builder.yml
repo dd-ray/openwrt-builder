@@ -84,23 +84,33 @@ jobs:
       - name: Download existing ccache
         if: ${{ github.event.inputs.INCREMENTAL == 'true' }}
         run: |
-          CCACHE_RELEASE="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
+          CCACHE_RELEASE="ccache"
           CCACHE_FILE="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}.tar.gz"
+          CCACHE_URL="https://github.com/${{ github.repository }}/releases/download/${CCACHE_RELEASE}/${CCACHE_FILE}"
           
+          echo "🔍 Checking for existing ccache: $CCACHE_FILE"
           # 尝试下载现有的ccache
-          if wget -q "https://github.com/${{ github.repository }}/releases/download/${CCACHE_RELEASE}/${CCACHE_FILE}"; then
-            echo "📦 Found existing ccache, extracting..."
-            cd "$SOURCE_PATH" || exit 1
-            tar -xzf "../${CCACHE_FILE}" || echo "⚠️ Failed to extract ccache, will start fresh"
-            cd ..
-            rm -f "${CCACHE_FILE}" || true
+          if wget --spider -q "$CCACHE_URL" 2>/dev/null; then
+            echo "📦 Found existing ccache, downloading..."
+            if wget -q "$CCACHE_URL"; then
+              cd "$SOURCE_PATH" || exit 1
+              if tar -xzf "../${CCACHE_FILE}"; then
+                echo "✅ CCache extracted successfully"
+              else
+                echo "⚠️ Failed to extract ccache, will start fresh"
+              fi
+              cd ..
+              rm -f "${CCACHE_FILE}" || true
+            else
+              echo "⚠️ Failed to download ccache, will start fresh"
+            fi
           else
             echo "🆕 No existing ccache found, starting fresh"
           fi
 
       - name: Download toolchain
         run: |
-          TOOLCHAIN_RELEASE="toolchain-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}"
+          TOOLCHAIN_RELEASE="toolchain"
           TOOLCHAIN_FILE="toolchain-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}.tar.gz"
           TOOLCHAIN_URL="https://github.com/${{ github.repository }}/releases/download/${TOOLCHAIN_RELEASE}/${TOOLCHAIN_FILE}"
           
@@ -139,11 +149,11 @@ jobs:
               fi
             done
           else
-            echo "❌ Toolchain not found: ${TOOLCHAIN_RELEASE}"
+            echo "❌ Toolchain not found: ${TOOLCHAIN_FILE}"
             echo "💡 请先构建对应的toolchain:"
             echo "gh workflow run 'toolchain-builder.yml' -f REPO_BRANCH='${{ env.REPO_BRANCH }}'"
-            echo "📋 或检查以下可用的toolchain releases:"
-            gh release list --limit 10 | grep "toolchain-" || echo "No toolchain releases found"
+            echo "📋 或检查可用的toolchain文件:"
+            gh release view toolchain --json assets | jq -r '.assets[].name' | grep "toolchain-" || echo "No toolchain files found"
             exit 1
           fi
 
@@ -189,25 +199,39 @@ jobs:
       - name: Create ccache release
         uses: ncipollo/release-action@v1.14.0
         with:
-          name: "CCache ${{ env.REPO_BRANCH }} ${{ env.DEVICE_PLATFORM }}"
+          name: "OpenWrt CCache"
           allowUpdates: true
-          tag: "ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
+          tag: "ccache"
           commit: main
-          replacesArtifacts: true
+          replacesArtifacts: false
           body: |
-            ## 🚀 OpenWrt CCache
+            ## 🚀 OpenWrt CCache 编译缓存集合
             
-            - **分支**: ${{ env.REPO_BRANCH }}
-            - **架构**: ${{ env.DEVICE_PLATFORM }}
-            - **目标设备**: ${{ github.event.inputs.TARGET_DEVICE }}
-            - **构建时间**: ${{ github.run_id }}
-            - **类型**: ${{ github.event.inputs.INCREMENTAL == 'true' && '增量更新' || '完整重建' }}
+            这个release包含所有分支和架构的OpenWrt ccache文件。
             
-            ### 使用方法
+            ### 📋 可用的CCache文件
+            
+            #### Main分支
+            - `ccache-main-arm64.tar.gz` - 适用于 ARM64 设备 (nanopi-r5s, cudy-tr3000)
+            - `ccache-main-amd64.tar.gz` - 适用于 x86_64 设备
+            
+            #### OpenWrt-24.10分支
+            - `ccache-openwrt-24.10-arm64.tar.gz`
+            - `ccache-openwrt-24.10-amd64.tar.gz`
+            
+            ### 🔧 使用方法
             ```bash
-            # 下载并解压ccache
-            wget https://github.com/${{ github.repository }}/releases/download/ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}/${{ env.CCACHE_FILE }}
-            tar -xzf ${{ env.CCACHE_FILE }} -C /path/to/openwrt/source/
+            # 下载对应架构的ccache文件
+            wget https://github.com/${{ github.repository }}/releases/download/ccache/ccache-{分支}-{架构}.tar.gz
+            
+            # 解压到OpenWrt源码目录
+            tar -xzf ccache-{分支}-{架构}.tar.gz -C /path/to/openwrt/source/
             ```
+            
+            ### 📝 最后更新
+            - **时间**: ${{ github.run_id }}
+            - **构建项**: ${{ env.DEVICE_PLATFORM }} (${{ env.REPO_BRANCH }})
+            - **目标设备**: ${{ github.event.inputs.TARGET_DEVICE }}
+            - **更新类型**: ${{ github.event.inputs.INCREMENTAL == 'true' && '增量更新' || '完整重建' }}
           artifacts: |
             ${{ env.SOURCE_PATH }}/${{ env.CCACHE_FILE }} 

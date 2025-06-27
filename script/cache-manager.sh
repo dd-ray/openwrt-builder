@@ -35,28 +35,33 @@ function check_toolchain_update_needed() {
     local current_commit=$(get_openwrt_commit "$source_path")
     local current_feeds_hash=$(get_feeds_hash "$source_path")
     
-    # 检查是否存在toolchain release
-    local toolchain_tag="toolchain-${REPO_BRANCH}-${toolchain_type}"
-    local release_info
+    # 检查固定的toolchain release中是否存在对应的文件
+    local toolchain_tag="toolchain"
+    local toolchain_file="toolchain-${REPO_BRANCH}-${toolchain_type}.tar.gz"
     
-    if release_info=$(gh release view "$toolchain_tag" --json body,createdAt 2>/dev/null); then
-        # 解析release信息中的构建参数
-        local release_commit=$(echo "$release_info" | jq -r '.body' | grep -oP 'Commit: \K[a-f0-9]+' || echo "unknown")
-        local release_date=$(echo "$release_info" | jq -r '.createdAt')
-        
-        echo "📊 Toolchain Status:"
-        echo "  Current commit: $current_commit"
-        echo "  Release commit: $release_commit"
-        echo "  Current feeds hash: $current_feeds_hash"
-        echo "  Release date: $release_date"
-        
-        # 如果commit不匹配，需要更新
-        if [ "$current_commit" != "$release_commit" ] || [ "$current_commit" == "unknown" ]; then
-            echo "🚀 Toolchain update needed (commit changed)"
-            return 0
+    if gh release view "$toolchain_tag" >/dev/null 2>&1; then
+        # 检查具体的toolchain文件是否存在
+        if gh release view "$toolchain_tag" --json assets | jq -e ".assets[] | select(.name == \"$toolchain_file\")" >/dev/null 2>&1; then
+            echo "📊 Toolchain Status:"
+            echo "  Found: $toolchain_file in release $toolchain_tag"
+            echo "  Current commit: $current_commit"
+            echo "  Current feeds hash: $current_feeds_hash"
+            
+            # 获取文件的更新时间
+            local file_date=$(gh release view "$toolchain_tag" --json assets | jq -r ".assets[] | select(.name == \"$toolchain_file\") | .updatedAt")
+            echo "  File date: $file_date"
+            
+            # 简单检查：如果当前commit未知，或者想要强制重建，则需要更新
+            if [ "$current_commit" == "unknown" ]; then
+                echo "🚀 Toolchain update needed (unknown commit)"
+                return 0
+            else
+                echo "✅ Toolchain file exists, assuming up to date"
+                return 1
+            fi
         else
-            echo "✅ Toolchain is up to date"
-            return 1
+            echo "🆕 Toolchain file not found: $toolchain_file, build needed"
+            return 0
         fi
     else
         echo "🆕 No toolchain release found, build needed"
@@ -70,26 +75,33 @@ function check_ccache_age() {
     
     echo "🔍 Checking ccache age..."
     
-    local ccache_tag="ccache-${REPO_BRANCH}-${device_platform}"
-    local release_info
+    local ccache_tag="ccache"
+    local ccache_file="ccache-${REPO_BRANCH}-${device_platform}.tar.gz"
     
-    if release_info=$(gh release view "$ccache_tag" --json createdAt 2>/dev/null); then
-        local release_date=$(echo "$release_info" | jq -r '.createdAt')
-        local release_timestamp=$(date -d "$release_date" +%s)
-        local current_timestamp=$(date +%s)
-        local age_days=$(( (current_timestamp - release_timestamp) / 86400 ))
-        
-        echo "📊 CCache Status:"
-        echo "  Release date: $release_date"
-        echo "  Age: $age_days days"
-        echo "  Max age: $max_age_days days"
-        
-        if [ $age_days -gt $max_age_days ]; then
-            echo "🔄 CCache is old, refresh recommended"
-            return 0
+    if gh release view "$ccache_tag" >/dev/null 2>&1; then
+        # 检查具体的ccache文件是否存在
+        if gh release view "$ccache_tag" --json assets | jq -e ".assets[] | select(.name == \"$ccache_file\")" >/dev/null 2>&1; then
+            local file_date=$(gh release view "$ccache_tag" --json assets | jq -r ".assets[] | select(.name == \"$ccache_file\") | .updatedAt")
+            local file_timestamp=$(date -d "$file_date" +%s)
+            local current_timestamp=$(date +%s)
+            local age_days=$(( (current_timestamp - file_timestamp) / 86400 ))
+            
+            echo "📊 CCache Status:"
+            echo "  Found: $ccache_file in release $ccache_tag"
+            echo "  File date: $file_date"
+            echo "  Age: $age_days days"
+            echo "  Max age: $max_age_days days"
+            
+            if [ $age_days -gt $max_age_days ]; then
+                echo "🔄 CCache is old, refresh recommended"
+                return 0
+            else
+                echo "✅ CCache is fresh"
+                return 1
+            fi
         else
-            echo "✅ CCache is fresh"
-            return 1
+            echo "🆕 CCache file not found: $ccache_file"
+            return 0
         fi
     else
         echo "🆕 No ccache release found"
