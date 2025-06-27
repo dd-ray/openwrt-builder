@@ -211,12 +211,11 @@ CONFIG_USE_GC_SECTIONS=y
 CONFIG_USE_LTO=y
 
 ## nginx
+CONFIG_PACKAGE_luci=n
 CONFIG_PACKAGE_luci-nginx=y
-CONFIG_PACKAGE_nginx=y
+CONFIG_PACKAGE_nginx-full=y
 CONFIG_PACKAGE_nginx-mod-luci=y
 CONFIG_PACKAGE_nginx-mod-luci-ssl=y
-CONFIG_PACKAGE_nginx-ssl=y
-CONFIG_PACKAGE_nginx-ssl-util=y
 CONFIG_PACKAGE_nginx-util=y
 CONFIG_PACKAGE_nginx-mod-brotli=y
 CONFIG_PACKAGE_nginx-mod-rtmp=y
@@ -229,7 +228,6 @@ CONFIG_NGINX_HTTP_QUIC=y
 CONFIG_NGINX_HTTP_REAL_IP=y
 CONFIG_NGINX_HTTP_SUB=y
 CONFIG_NGINX_STREAM_REAL_IP=y
-CONFIG_NGINX_HEADERS_MORE=y
 CONFIG_NGINX_HTTP_ACCESS=y
 CONFIG_NGINX_HTTP_AUTH_BASIC=y
 CONFIG_NGINX_HTTP_AUTOINDEX=y
@@ -263,24 +261,8 @@ CONFIG_NGINX_PCRE=y
 CONFIG_NGINX_UBUS=y
 
 
-# fullcone
-#CONFIG_PACKAGE_kmod-nft-fullcone=y
-#CONFIG_PACKAGE_nat6=y
-#CONFIG_PACKAGE_natflow=m
-# SFE
-#CONFIG_PACKAGE_kmod-fast-classifier=y
-#CONFIG_PACKAGE_kmod-shortcut-fe=y
-#CONFIG_PACKAGE_kmod-shortcut-fe-cm=y
-
 CONFIG_PACKAGE_iperf3=y
 CONFIG_PACKAGE_jq=y
 CONFIG_PACKAGE_rclone=y
 CONFIG_PACKAGE_rclone-config=y
 CONFIG_PACKAGE_rsync=y
-
-CONFIG_PACKAGE_prometheus-node-exporter-lua=y
-CONFIG_PACKAGE_prometheus-node-exporter-lua-nat_traffic=y
-CONFIG_PACKAGE_prometheus-node-exporter-lua-netstat=y
-CONFIG_PACKAGE_prometheus-node-exporter-lua-openwrt=y
-CONFIG_PACKAGE_prometheus-node-exporter-lua-textfile=y
-CONFIG_PACKAGE_prometheus-node-exporter-lua-uci_dhcp_host=y

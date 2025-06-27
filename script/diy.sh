@@ -59,4 +59,6 @@ git clone https://github.com/sbwml/v2ray-geodata package/new/v2ray-geodata
 # 修补 rust 包 Makefile 中的 --set=llvm.download-ci-llvm=true
 sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' feeds/packages/lang/rust/Makefile
 use_turboacc
+# 修复 turboacc 的 luci-nginx 依赖
+sed -i 's/+luci +luci-compat/+luci-nginx +luci-compat/g' package/turboacc/luci-app-turboacc/Makefile
 popd
