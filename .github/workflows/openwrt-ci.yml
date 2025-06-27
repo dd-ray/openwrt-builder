@@ -29,7 +29,6 @@ env:
   SOURCE_PATH: "/openwrt/openwrt-source"
   TZ: Asia/Shanghai
   BUILDER_PATH: ${{ github.workspace }}
-  CCACHE_DIR: /openwrt/ccache
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -55,26 +54,85 @@ jobs:
           ln -sf ${{ env.SOURCE_PATH }} ${{ github.workspace }}/openwrt-source
       - name: Set Environment Variables
         run: |
-          if [ ${{ matrix.DEVICE }} == "nanopi-r5s" ]; then
-            DEVICE_PLATFORM="arm64"
-          elif [ ${{ matrix.DEVICE }} == "cudy-tr3000" ]; then
-            DEVICE_PLATFORM="arm64"
-          elif [ ${{ matrix.DEVICE }} == "x86_64" ]; then
-            DEVICE_PLATFORM="amd64"
+          # 使用device-toolchain-mapping.sh脚本统一管理映射关系
+          source script/device-toolchain-mapping.sh
+          
+          TOOLCHAIN_TYPE=$(get_toolchain_type "${{ matrix.DEVICE }}")
+          DEVICE_PLATFORM=$(get_device_platform "${{ matrix.DEVICE }}")
+          
+          if [ "$TOOLCHAIN_TYPE" = "unknown" ] || [ "$DEVICE_PLATFORM" = "unknown" ]; then
+            echo "❌ Unsupported device: ${{ matrix.DEVICE }}"
+            ./script/device-toolchain-mapping.sh list-mappings
+            exit 1
           fi
+          
           echo "DEVICE_PLATFORM=${DEVICE_PLATFORM}" >> $GITHUB_ENV
+          echo "TOOLCHAIN_TYPE=${TOOLCHAIN_TYPE}" >> $GITHUB_ENV
+          echo "📋 Device: ${{ matrix.DEVICE }} -> Platform: ${DEVICE_PLATFORM}, Toolchain: ${TOOLCHAIN_TYPE}"
 
-      - name: Restore ccache Cached
+      - name: Download toolchain from release
+        if: ${{ github.event.inputs.CCACHE == 'true' }}
+        run: |
+          TOOLCHAIN_RELEASE="toolchain-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}"
+          TOOLCHAIN_FILE="toolchain-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}.tar.gz"
+          
+          echo "🔍 Checking for toolchain release: ${TOOLCHAIN_RELEASE}"
+          echo "📋 Toolchain type: ${{ env.TOOLCHAIN_TYPE }}"
+          if wget -q --spider "https://github.com/${{ github.repository }}/releases/download/${TOOLCHAIN_RELEASE}/${TOOLCHAIN_FILE}"; then
+            echo "📥 Downloading toolchain from release..."
+            wget -q "https://github.com/${{ github.repository }}/releases/download/${TOOLCHAIN_RELEASE}/${TOOLCHAIN_FILE}"
+            cd "$SOURCE_PATH" || exit 1
+            echo "📦 Extracting toolchain..."
+            tar -xzf "../${TOOLCHAIN_FILE}"
+            cd ..
+            rm -f "${TOOLCHAIN_FILE}"
+            echo "✅ Toolchain restored from release"
+          else
+            echo "⚠️ No toolchain release found for ${{ env.TOOLCHAIN_TYPE }}, will build from scratch"
+          fi
+
+      - name: Download ccache from release
+        if: ${{ github.event.inputs.CCACHE == 'true' }}
+        run: |
+          CCACHE_RELEASE="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
+          CCACHE_FILE="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}.tar.gz"
+          
+          echo "🔍 Checking for ccache release: ${CCACHE_RELEASE}"
+          if wget -q --spider "https://github.com/${{ github.repository }}/releases/download/${CCACHE_RELEASE}/${CCACHE_FILE}"; then
+            echo "📥 Downloading ccache from release..."
+            wget -q "https://github.com/${{ github.repository }}/releases/download/${CCACHE_RELEASE}/${CCACHE_FILE}"
+            cd "$SOURCE_PATH" || exit 1
+            echo "📦 Extracting ccache..."
+            tar -xzf "../${CCACHE_FILE}" || echo "⚠️ Failed to extract ccache, will start fresh"
+            cd ..
+            rm -f "${CCACHE_FILE}"
+            echo "✅ CCache restored from release"
+          else
+            echo "⚠️ No ccache release found, will start fresh"
+          fi
+
+      - name: Generate cache key
+        if: ${{ github.event.inputs.CCACHE == 'true' }}
+        run: |
+          # 生成更准确的缓存key，包含toolchain类型和配置文件哈希
+          CONFIG_HASH=$(find config/ -name "*.seed" -type f -exec cat {} \; | md5sum | cut -d' ' -f1)
+          CACHE_KEY="build-dir-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}-${CONFIG_HASH}"
+          echo "BUILD_DIR_CACHE_KEY=${CACHE_KEY}" >> $GITHUB_ENV
+          echo "📋 Build dir cache key: ${CACHE_KEY}"
+
+      - name: Restore build_dir cache
         if: ${{ github.event.inputs.CCACHE == 'true' }}
         uses: actions/cache/restore@v4
         with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}-ccache
-      - name: Restore staging_dir Cached
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ env.SOURCE_PATH }}/staging_dir
-          key: ${{ env.REPO_BRANCH }}-${{ matrix.DEVICE }}-staging_dir
+          path: |
+            ${{ env.SOURCE_PATH }}/build_dir/host
+            ${{ env.SOURCE_PATH }}/build_dir/target-*
+            ${{ env.SOURCE_PATH }}/staging_dir/host*
+            ${{ env.SOURCE_PATH }}/staging_dir/target-*
+          key: ${{ env.BUILD_DIR_CACHE_KEY }}
+          restore-keys: |
+            build-dir-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}-
+            build-dir-${{ env.REPO_BRANCH }}-
 
       - name: Update feeds
         run: ./script/tool.sh update_feeds
@@ -83,10 +141,8 @@ jobs:
           CONFIG_FILE: ${{ matrix.DEVICE }}.seed
         run: |
           ./script/tool.sh build_config
-          if [ ${{ github.event.inputs.CCACHE == 'true' }} ]; then
-            echo "CONFIG_CCACHE=y" >> .config
-            echo "CONFIG_CCACHE_DIR=${{ env.CCACHE_DIR }}" >> .config
-          fi
+          echo "CONFIG_CCACHE=y" >> .config
+
       - name: Make download
         run: ./script/tool.sh make_download
       - name: Compile firmware
@@ -109,14 +165,66 @@ jobs:
           name: OpenWrt firmware ${{ matrix.DEVICE }}
           path: |
             ${{env.SOURCE_PATH}}/bin/targets/
-      - name: Save ccache Cache
-        uses: actions/cache/save@v4
+      - name: Update ccache release
+        if: ${{ github.event.inputs.CCACHE == 'true' }}
+        run: |
+          cd "$SOURCE_PATH" || exit 1
+          CCACHE_NAME="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
+          CCACHE_RELEASE="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
+          
+          # 检查是否有ccache数据需要上传
+          # 使用更合理的阈值（10MB = 10240KB）
+          CCACHE_SIZE_KB=$(du -s .ccache | cut -f1)
+          CCACHE_THRESHOLD=10240
+          
+          if [ -d ".ccache" ] && [ "$CCACHE_SIZE_KB" -gt "$CCACHE_THRESHOLD" ]; then
+            echo "📦 Packaging updated ccache..."
+            echo "💾 CCache size: $(du -sh .ccache | cut -f1)"
+            tar -czf "${CCACHE_NAME}.tar.gz" .ccache/
+            
+            # 检查ccache统计信息
+            if [ -x "$(command -v ccache)" ]; then
+              echo "📊 Final CCache Statistics:"
+              ccache -s
+            fi
+            
+            echo "CCACHE_FILE=${CCACHE_NAME}.tar.gz" >> $GITHUB_ENV
+            echo "SHOULD_UPDATE_CCACHE=true" >> $GITHUB_ENV
+            echo "✅ CCache will be updated (${CCACHE_SIZE_KB}KB > ${CCACHE_THRESHOLD}KB)"
+          else
+            echo "⚠️ CCache too small for upload (${CCACHE_SIZE_KB}KB <= ${CCACHE_THRESHOLD}KB)"
+            echo "SHOULD_UPDATE_CCACHE=false" >> $GITHUB_ENV
+          fi
+
+      - name: Create/Update ccache release
+        if: ${{ github.event.inputs.CCACHE == 'true' && env.SHOULD_UPDATE_CCACHE == 'true' }}
+        uses: ncipollo/release-action@v1.14.0
         with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}-ccache
-      - name: Save staging_dir Cache
+          name: "CCache ${{ env.REPO_BRANCH }} ${{ env.DEVICE_PLATFORM }}"
+          allowUpdates: true
+          tag: "ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
+          commit: main
+          replacesArtifacts: true
+          body: |
+            ## 🚀 OpenWrt CCache (Auto Updated)
+            
+            - **分支**: ${{ env.REPO_BRANCH }}
+            - **架构**: ${{ env.DEVICE_PLATFORM }}
+            - **设备**: ${{ matrix.DEVICE }}
+            - **更新时间**: ${{ github.run_id }}
+            - **构建类型**: 自动更新
+            
+            > 此ccache由构建流程自动更新，包含最新的编译缓存数据
+          artifacts: |
+            ${{ env.SOURCE_PATH }}/${{ env.CCACHE_FILE }}
+
+      - name: Save build_dir cache
+        if: ${{ github.event.inputs.CCACHE == 'true' }}
         uses: actions/cache/save@v4
         with:
           path: |
-            ${{ env.SOURCE_PATH }}/staging_dir
-          key: ${{ env.REPO_BRANCH }}-${{ matrix.DEVICE }}-staging_dir
+            ${{ env.SOURCE_PATH }}/build_dir/host
+            ${{ env.SOURCE_PATH }}/build_dir/target-*
+            ${{ env.SOURCE_PATH }}/staging_dir/host*
+            ${{ env.SOURCE_PATH }}/staging_dir/target-*
+          key: ${{ env.BUILD_DIR_CACHE_KEY }}

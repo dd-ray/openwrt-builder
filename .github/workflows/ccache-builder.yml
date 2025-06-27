@@ -1,0 +1,213 @@
+name: CCache Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      REPO_URL:
+        description: "OpenWrt仓库"
+        required: true
+        default: "openwrt/openwrt"
+        type: choice
+        options:
+          - "openwrt/openwrt"
+      REPO_BRANCH:
+        description: "OpenWrt分支"
+        required: true
+        default: "main"
+        type: choice
+        options:
+          - "main"
+          - "openwrt-24.10"
+      TARGET_DEVICE:
+        description: "目标设备"
+        required: true
+        default: "nanopi-r5s"
+        type: choice
+        options:
+          - "nanopi-r5s"
+          - "cudy-tr3000"
+          - "x86_64"
+      INCREMENTAL:
+        description: "增量更新ccache"
+        type: boolean
+        default: true
+
+env:
+  REPO_URL: "https://github.com/${{ github.event.inputs.REPO_URL }}.git"
+  REPO_BRANCH: ${{ github.event.inputs.REPO_BRANCH }}
+  SOURCE_PATH: "/openwrt/openwrt-source"
+  TZ: Asia/Shanghai
+  BUILDER_PATH: ${{ github.workspace }}
+
+jobs:
+  build-ccache:
+    runs-on: ubuntu-latest
+    name: Build CCache ${{ github.event.inputs.TARGET_DEVICE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set Environment Variables
+        run: |
+          # 使用device-toolchain-mapping.sh脚本统一管理映射关系
+          source script/device-toolchain-mapping.sh
+          
+          TOOLCHAIN_TYPE=$(get_toolchain_type "${{ github.event.inputs.TARGET_DEVICE }}")
+          DEVICE_PLATFORM=$(get_device_platform "${{ github.event.inputs.TARGET_DEVICE }}")
+          
+          if [ "$TOOLCHAIN_TYPE" = "unknown" ] || [ "$DEVICE_PLATFORM" = "unknown" ]; then
+            echo "❌ Unsupported device: ${{ github.event.inputs.TARGET_DEVICE }}"
+            ./script/device-toolchain-mapping.sh list-mappings
+            exit 1
+          fi
+          
+          echo "DEVICE_PLATFORM=${DEVICE_PLATFORM}" >> $GITHUB_ENV
+          echo "TOOLCHAIN_TYPE=${TOOLCHAIN_TYPE}" >> $GITHUB_ENV
+          echo "📋 Device: ${{ github.event.inputs.TARGET_DEVICE }} -> Platform: ${DEVICE_PLATFORM}, Toolchain: ${TOOLCHAIN_TYPE}"
+
+      - name: Space cleanup
+        uses: dd-ray/github-actions@free-disk
+        with:
+          build-mount-path: /openwrt
+
+      - name: Build System Setup
+        uses: dd-ray/github-actions@openwrt-build-setup
+
+      - name: Install LLVM
+        uses: dd-ray/github-actions@install-llvm
+
+      - name: Clone OpenWrt
+        run: |
+          ./script/tool.sh clone
+          ln -sf ${{ env.SOURCE_PATH }} ${{ github.workspace }}/openwrt-source
+
+      - name: Download existing ccache
+        if: ${{ github.event.inputs.INCREMENTAL == 'true' }}
+        run: |
+          CCACHE_RELEASE="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
+          CCACHE_FILE="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}.tar.gz"
+          
+          # 尝试下载现有的ccache
+          if wget -q "https://github.com/${{ github.repository }}/releases/download/${CCACHE_RELEASE}/${CCACHE_FILE}"; then
+            echo "📦 Found existing ccache, extracting..."
+            cd "$SOURCE_PATH" || exit 1
+            tar -xzf "../${CCACHE_FILE}" || echo "⚠️ Failed to extract ccache, will start fresh"
+            cd ..
+            rm -f "${CCACHE_FILE}" || true
+          else
+            echo "🆕 No existing ccache found, starting fresh"
+          fi
+
+      - name: Download toolchain
+        run: |
+          TOOLCHAIN_RELEASE="toolchain-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}"
+          TOOLCHAIN_FILE="toolchain-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}.tar.gz"
+          TOOLCHAIN_URL="https://github.com/${{ github.repository }}/releases/download/${TOOLCHAIN_RELEASE}/${TOOLCHAIN_FILE}"
+          
+          echo "🔍 Downloading toolchain for ${{ env.TOOLCHAIN_TYPE }}"
+          echo "📍 URL: ${TOOLCHAIN_URL}"
+          
+          # 先检查toolchain是否存在
+          if wget --spider -q "${TOOLCHAIN_URL}" 2>/dev/null; then
+            echo "✅ Toolchain found, downloading..."
+            # 重试机制下载
+            for attempt in 1 2 3; do
+              if wget -q "${TOOLCHAIN_URL}"; then
+                echo "🛠️ Toolchain downloaded successfully (attempt $attempt)"
+                cd "$SOURCE_PATH" || exit 1
+                if tar -xzf "../${TOOLCHAIN_FILE}"; then
+                  echo "📦 Toolchain extracted successfully"
+                  cd ..
+                  rm -f "${TOOLCHAIN_FILE}"
+                  break
+                else
+                  echo "⚠️ Failed to extract toolchain (attempt $attempt)"
+                  cd ..
+                  rm -f "${TOOLCHAIN_FILE}"
+                  if [ $attempt -eq 3 ]; then
+                    echo "❌ Failed to extract toolchain after 3 attempts"
+                    exit 1
+                  fi
+                fi
+              else
+                echo "⚠️ Failed to download toolchain (attempt $attempt)"
+                if [ $attempt -eq 3 ]; then
+                  echo "❌ Failed to download toolchain after 3 attempts"
+                  exit 1
+                fi
+                sleep 10
+              fi
+            done
+          else
+            echo "❌ Toolchain not found: ${TOOLCHAIN_RELEASE}"
+            echo "💡 请先构建对应的toolchain:"
+            echo "gh workflow run 'toolchain-builder.yml' -f REPO_BRANCH='${{ env.REPO_BRANCH }}'"
+            echo "📋 或检查以下可用的toolchain releases:"
+            gh release list --limit 10 | grep "toolchain-" || echo "No toolchain releases found"
+            exit 1
+          fi
+
+      - name: Update feeds
+        run: ./script/tool.sh update_feeds
+
+      - name: Generate configuration file
+        env:
+          CONFIG_FILE: ${{ github.event.inputs.TARGET_DEVICE }}.seed
+        run: |
+          ./script/tool.sh build_config
+          echo "CONFIG_CCACHE=y" >> .config
+
+      - name: Make download
+        run: ./script/tool.sh make_download
+
+      - name: Compile with ccache
+        run: |
+          cd "$SOURCE_PATH" || exit 1
+          make -j$(nproc) || make -j1 V=s
+          
+          # 检查ccache使用情况
+          if [ -x "$(command -v ccache)" ]; then
+            echo "📊 CCache Statistics:"
+            ccache -s
+          fi
+
+      - name: Package ccache
+        run: |
+          cd "$SOURCE_PATH" || exit 1
+          CCACHE_NAME="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
+          
+          # 打包ccache目录
+          if [ -d ".ccache" ]; then
+            tar -czf "${CCACHE_NAME}.tar.gz" .ccache/
+            echo "✅ CCache package created: $(ls -lh ${CCACHE_NAME}.tar.gz)"
+            echo "CCACHE_FILE=${CCACHE_NAME}.tar.gz" >> $GITHUB_ENV
+          else
+            echo "❌ No ccache directory found"
+            exit 1
+          fi
+
+      - name: Create ccache release
+        uses: ncipollo/release-action@v1.14.0
+        with:
+          name: "CCache ${{ env.REPO_BRANCH }} ${{ env.DEVICE_PLATFORM }}"
+          allowUpdates: true
+          tag: "ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
+          commit: main
+          replacesArtifacts: true
+          body: |
+            ## 🚀 OpenWrt CCache
+            
+            - **分支**: ${{ env.REPO_BRANCH }}
+            - **架构**: ${{ env.DEVICE_PLATFORM }}
+            - **目标设备**: ${{ github.event.inputs.TARGET_DEVICE }}
+            - **构建时间**: ${{ github.run_id }}
+            - **类型**: ${{ github.event.inputs.INCREMENTAL == 'true' && '增量更新' || '完整重建' }}
+            
+            ### 使用方法
+            ```bash
+            # 下载并解压ccache
+            wget https://github.com/${{ github.repository }}/releases/download/ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}/${{ env.CCACHE_FILE }}
+            tar -xzf ${{ env.CCACHE_FILE }} -C /path/to/openwrt/source/
+            ```
+          artifacts: |
+            ${{ env.SOURCE_PATH }}/${{ env.CCACHE_FILE }} 

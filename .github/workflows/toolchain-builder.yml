@@ -1,0 +1,204 @@
+name: Toolchain Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      REPO_URL:
+        description: "OpenWrt仓库"
+        required: true
+        default: "openwrt/openwrt"
+        type: choice
+        options:
+          - "openwrt/openwrt"
+      REPO_BRANCH:
+        description: "OpenWrt分支"
+        required: true
+        default: "main"
+        type: choice
+        options:
+          - "main"
+          - "openwrt-24.10"
+      FORCE_REBUILD:
+        description: "强制重新构建toolchain"
+        type: boolean
+        default: false
+
+env:
+  REPO_URL: "https://github.com/${{ github.event.inputs.REPO_URL }}.git"
+  REPO_BRANCH: ${{ github.event.inputs.REPO_BRANCH }}
+  SOURCE_PATH: "/openwrt/openwrt-source"
+  TZ: Asia/Shanghai
+  BUILDER_PATH: ${{ github.workspace }}
+
+jobs:
+  build-toolchain:
+    runs-on: ubuntu-latest
+    name: Build Toolchain ${{matrix.TOOLCHAIN_TYPE}}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - TOOLCHAIN_TYPE: "aarch64_cortex-a53"
+            DEVICE_PLATFORM: "arm64"
+            DEVICE: "nanopi-r5s"
+          - TOOLCHAIN_TYPE: "aarch64_generic"
+            DEVICE_PLATFORM: "arm64"
+            DEVICE: "cudy-tr3000"
+          - TOOLCHAIN_TYPE: "x86_64"
+            DEVICE_PLATFORM: "amd64"
+            DEVICE: "x86_64"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate device mapping
+        run: |
+          # 验证matrix中的设备映射与脚本中的映射是否一致
+          source script/device-toolchain-mapping.sh
+          
+          EXPECTED_TOOLCHAIN=$(get_toolchain_type "${{ matrix.DEVICE }}")
+          EXPECTED_PLATFORM=$(get_device_platform "${{ matrix.DEVICE }}")
+          
+          if [ "$EXPECTED_TOOLCHAIN" != "${{ matrix.TOOLCHAIN_TYPE }}" ]; then
+            echo "❌ Toolchain type mismatch for ${{ matrix.DEVICE }}"
+            echo "   Expected: $EXPECTED_TOOLCHAIN"
+            echo "   Matrix:   ${{ matrix.TOOLCHAIN_TYPE }}"
+            exit 1
+          fi
+          
+          if [ "$EXPECTED_PLATFORM" != "${{ matrix.DEVICE_PLATFORM }}" ]; then
+            echo "❌ Platform mismatch for ${{ matrix.DEVICE }}"
+            echo "   Expected: $EXPECTED_PLATFORM"
+            echo "   Matrix:   ${{ matrix.DEVICE_PLATFORM }}"
+            exit 1
+          fi
+          
+          echo "✅ Device mapping validated: ${{ matrix.DEVICE }} -> ${{ matrix.TOOLCHAIN_TYPE }} (${{ matrix.DEVICE_PLATFORM }})"
+
+      - name: Check if toolchain exists
+        if: ${{ github.event.inputs.FORCE_REBUILD != 'true' }}
+        id: check_toolchain
+        run: |
+          RELEASE_TAG="toolchain-${{ env.REPO_BRANCH }}-${{ matrix.TOOLCHAIN_TYPE }}"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "🔍 Toolchain release already exists: $RELEASE_TAG"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "🚀 Need to build toolchain: $RELEASE_TAG"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Space cleanup
+        if: steps.check_toolchain.outputs.exists != 'true'
+        uses: dd-ray/github-actions@free-disk
+        with:
+          build-mount-path: /openwrt
+
+      - name: Build System Setup
+        if: steps.check_toolchain.outputs.exists != 'true'
+        uses: dd-ray/github-actions@openwrt-build-setup
+
+      - name: Install LLVM
+        if: steps.check_toolchain.outputs.exists != 'true'
+        uses: dd-ray/github-actions@install-llvm
+
+      - name: Clone OpenWrt
+        if: steps.check_toolchain.outputs.exists != 'true'
+        run: |
+          ./script/tool.sh clone
+          ln -sf ${{ env.SOURCE_PATH }} ${{ github.workspace }}/openwrt-source
+
+      - name: Update feeds
+        if: steps.check_toolchain.outputs.exists != 'true'
+        run: ./script/tool.sh update_feeds
+
+      - name: Generate configuration file
+        if: steps.check_toolchain.outputs.exists != 'true'
+        env:
+          CONFIG_FILE: ${{ matrix.DEVICE }}.seed
+        run: |
+          ./script/tool.sh build_config
+          echo "CONFIG_CCACHE=y" >> .config
+
+      - name: Make defconfig
+        if: steps.check_toolchain.outputs.exists != 'true'
+        run: |
+          cd "$SOURCE_PATH" || exit 1
+          make defconfig
+
+      - name: Build toolchain only
+        if: steps.check_toolchain.outputs.exists != 'true'
+        run: |
+          cd "$SOURCE_PATH" || exit 1
+          make tools/install -j$(nproc) V=s
+          make toolchain/install -j$(nproc) V=s
+
+      - name: Package toolchain
+        if: steps.check_toolchain.outputs.exists != 'true'
+        run: |
+          cd "$SOURCE_PATH" || exit 1
+          TOOLCHAIN_NAME="toolchain-${{ env.REPO_BRANCH }}-${{ matrix.TOOLCHAIN_TYPE }}"
+          echo "📦 Packaging toolchain for ${{ matrix.TOOLCHAIN_TYPE }}"
+          
+          # 查找实际的toolchain目录
+          TOOLCHAIN_DIRS=$(find build_dir -name "toolchain-*" -type d 2>/dev/null || true)
+          STAGING_TOOLCHAIN_DIRS=$(find staging_dir -name "toolchain-*" -type d 2>/dev/null || true)
+          
+          if [ -z "$TOOLCHAIN_DIRS" ]; then
+            echo "❌ No toolchain directories found in build_dir"
+            exit 1
+          fi
+          
+          echo "🔍 Found toolchain directories:"
+          echo "$TOOLCHAIN_DIRS"
+          echo "$STAGING_TOOLCHAIN_DIRS"
+          
+          tar -czf "${TOOLCHAIN_NAME}.tar.gz" \
+            --exclude='*.o' \
+            --exclude='*.a' \
+            --exclude='.git*' \
+            build_dir/toolchain-* \
+            build_dir/host \
+            staging_dir/toolchain-* \
+            staging_dir/host* || true
+          
+          # 检查文件是否存在且不为空
+          if [ -s "${TOOLCHAIN_NAME}.tar.gz" ]; then
+            echo "✅ Toolchain package created: $(ls -lh ${TOOLCHAIN_NAME}.tar.gz)"
+            echo "TOOLCHAIN_FILE=${TOOLCHAIN_NAME}.tar.gz" >> $GITHUB_ENV
+          else
+            echo "❌ Failed to create toolchain package"
+            exit 1
+          fi
+
+      - name: Create toolchain release
+        if: steps.check_toolchain.outputs.exists != 'true'
+        uses: ncipollo/release-action@v1.14.0
+        with:
+          name: "Toolchain ${{ env.REPO_BRANCH }} ${{ matrix.TOOLCHAIN_TYPE }}"
+          allowUpdates: true
+          tag: "toolchain-${{ env.REPO_BRANCH }}-${{ matrix.TOOLCHAIN_TYPE }}"
+          commit: main
+          replacesArtifacts: true
+          body: |
+            ## 🛠️ OpenWrt Toolchain
+            
+            - **分支**: ${{ env.REPO_BRANCH }}
+            - **Toolchain类型**: ${{ matrix.TOOLCHAIN_TYPE }}
+            - **架构**: ${{ matrix.DEVICE_PLATFORM }}
+            - **代表设备**: ${{ matrix.DEVICE }}
+            - **构建时间**: ${{ github.run_id }}
+            
+            ### 兼容设备
+            此toolchain适用于使用 `${{ matrix.TOOLCHAIN_TYPE }}` 工具链的所有设备。
+            
+            ### 使用方法
+            ```bash
+            # 下载并解压toolchain
+            wget https://github.com/${{ github.repository }}/releases/download/toolchain-${{ env.REPO_BRANCH }}-${{ matrix.TOOLCHAIN_TYPE }}/${{ env.TOOLCHAIN_FILE }}
+            tar -xzf ${{ env.TOOLCHAIN_FILE }} -C /path/to/openwrt/source/
+            ```
+          artifacts: |
+            ${{ env.SOURCE_PATH }}/${{ env.TOOLCHAIN_FILE }} 
