@@ -98,13 +98,15 @@ jobs:
               
               # 验证文件确实存在且不为空
               if [ -f "${CCACHE_FILE}" ] && [ -s "${CCACHE_FILE}" ]; then
+                # 使用绝对路径避免路径问题
+                CCACHE_ABS_PATH="$(pwd)/${CCACHE_FILE}"
                 cd "$SOURCE_PATH" || exit 1
-                if tar -xzf "../${CCACHE_FILE}"; then
+                if tar -xzf "${CCACHE_ABS_PATH}"; then
                   echo "✅ CCache extracted successfully"
                 else
                   echo "⚠️ Failed to extract ccache, will start fresh"
                 fi
-                cd ..
+                cd - >/dev/null
                 rm -f "${CCACHE_FILE}" || true
               else
                 echo "⚠️ Downloaded ccache file is empty or doesn't exist, will start fresh"
@@ -136,23 +138,25 @@ jobs:
                 echo "📋 Downloaded file info:"
                 ls -lh "${TOOLCHAIN_FILE}"
                 
-                # 验证文件确实存在且不为空
-                if [ -f "${TOOLCHAIN_FILE}" ] && [ -s "${TOOLCHAIN_FILE}" ]; then
-                  cd "$SOURCE_PATH" || exit 1
-                  if tar -xzf "../${TOOLCHAIN_FILE}"; then
-                    echo "📦 Toolchain extracted successfully"
-                    cd ..
-                    rm -f "${TOOLCHAIN_FILE}"
-                    break
-                  else
-                    echo "⚠️ Failed to extract toolchain (attempt $attempt)"
-                    cd ..
-                    rm -f "${TOOLCHAIN_FILE}"
-                    if [ $attempt -eq 3 ]; then
-                      echo "❌ Failed to extract toolchain after 3 attempts"
-                      exit 1
-                    fi
-                  fi
+                                 # 验证文件确实存在且不为空
+                 if [ -f "${TOOLCHAIN_FILE}" ] && [ -s "${TOOLCHAIN_FILE}" ]; then
+                   # 使用绝对路径避免路径问题
+                   TOOLCHAIN_ABS_PATH="$(pwd)/${TOOLCHAIN_FILE}"
+                   cd "$SOURCE_PATH" || exit 1
+                   if tar -xzf "${TOOLCHAIN_ABS_PATH}"; then
+                     echo "📦 Toolchain extracted successfully"
+                     cd - >/dev/null
+                     rm -f "${TOOLCHAIN_FILE}"
+                     break
+                   else
+                     echo "⚠️ Failed to extract toolchain (attempt $attempt)"
+                     cd - >/dev/null
+                     rm -f "${TOOLCHAIN_FILE}"
+                     if [ $attempt -eq 3 ]; then
+                       echo "❌ Failed to extract toolchain after 3 attempts"
+                       exit 1
+                     fi
+                   fi
                 else
                   echo "⚠️ Downloaded file is empty or doesn't exist (attempt $attempt)"
                   rm -f "${TOOLCHAIN_FILE}"

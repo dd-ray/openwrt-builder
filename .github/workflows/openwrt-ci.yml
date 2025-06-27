@@ -89,14 +89,16 @@ jobs:
               
               # 验证文件确实存在且不为空
               if [ -f "${TOOLCHAIN_FILE}" ] && [ -s "${TOOLCHAIN_FILE}" ]; then
+                # 使用绝对路径避免路径问题
+                TOOLCHAIN_ABS_PATH="$(pwd)/${TOOLCHAIN_FILE}"
                 cd "$SOURCE_PATH" || exit 1
                 echo "📦 Extracting toolchain..."
-                if tar -xzf "../${TOOLCHAIN_FILE}"; then
+                if tar -xzf "${TOOLCHAIN_ABS_PATH}"; then
                   echo "✅ Toolchain restored from release"
                 else
                   echo "⚠️ Failed to extract toolchain, will build from scratch"
                 fi
-                cd ..
+                cd - >/dev/null
                 rm -f "${TOOLCHAIN_FILE}"
               else
                 echo "⚠️ Downloaded file is empty or doesn't exist, will build from scratch"
@@ -129,14 +131,16 @@ jobs:
               
               # 验证文件确实存在且不为空
               if [ -f "${CCACHE_FILE}" ] && [ -s "${CCACHE_FILE}" ]; then
+                # 使用绝对路径避免路径问题
+                CCACHE_ABS_PATH="$(pwd)/${CCACHE_FILE}"
                 cd "$SOURCE_PATH" || exit 1
                 echo "📦 Extracting ccache..."
-                if tar -xzf "../${CCACHE_FILE}"; then
+                if tar -xzf "${CCACHE_ABS_PATH}"; then
                   echo "✅ CCache restored from release"
                 else
                   echo "⚠️ Failed to extract ccache, will start fresh"
                 fi
-                cd ..
+                cd - >/dev/null
                 rm -f "${CCACHE_FILE}"
               else
                 echo "⚠️ Downloaded ccache file is empty or doesn't exist, will start fresh"
