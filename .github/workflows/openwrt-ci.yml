@@ -83,16 +83,25 @@ jobs:
           
           if wget -q --spider "${TOOLCHAIN_URL}"; then
             echo "📥 Downloading toolchain from release..."
-            if wget -q "${TOOLCHAIN_URL}"; then
-              cd "$SOURCE_PATH" || exit 1
-              echo "📦 Extracting toolchain..."
-              if tar -xzf "../${TOOLCHAIN_FILE}"; then
-                echo "✅ Toolchain restored from release"
+            if wget -q "${TOOLCHAIN_URL}" -O "${TOOLCHAIN_FILE}"; then
+              echo "📋 Downloaded file info:"
+              ls -lh "${TOOLCHAIN_FILE}"
+              
+              # 验证文件确实存在且不为空
+              if [ -f "${TOOLCHAIN_FILE}" ] && [ -s "${TOOLCHAIN_FILE}" ]; then
+                cd "$SOURCE_PATH" || exit 1
+                echo "📦 Extracting toolchain..."
+                if tar -xzf "../${TOOLCHAIN_FILE}"; then
+                  echo "✅ Toolchain restored from release"
+                else
+                  echo "⚠️ Failed to extract toolchain, will build from scratch"
+                fi
+                cd ..
+                rm -f "${TOOLCHAIN_FILE}"
               else
-                echo "⚠️ Failed to extract toolchain, will build from scratch"
+                echo "⚠️ Downloaded file is empty or doesn't exist, will build from scratch"
+                rm -f "${TOOLCHAIN_FILE}"
               fi
-              cd ..
-              rm -f "${TOOLCHAIN_FILE}"
             else
               echo "⚠️ Failed to download toolchain, will build from scratch"
             fi
@@ -114,16 +123,25 @@ jobs:
           
           if wget -q --spider "${CCACHE_URL}"; then
             echo "📥 Downloading ccache from release..."
-            if wget -q "${CCACHE_URL}"; then
-              cd "$SOURCE_PATH" || exit 1
-              echo "📦 Extracting ccache..."
-              if tar -xzf "../${CCACHE_FILE}"; then
-                echo "✅ CCache restored from release"
+            if wget -q "${CCACHE_URL}" -O "${CCACHE_FILE}"; then
+              echo "📋 Downloaded file info:"
+              ls -lh "${CCACHE_FILE}"
+              
+              # 验证文件确实存在且不为空
+              if [ -f "${CCACHE_FILE}" ] && [ -s "${CCACHE_FILE}" ]; then
+                cd "$SOURCE_PATH" || exit 1
+                echo "📦 Extracting ccache..."
+                if tar -xzf "../${CCACHE_FILE}"; then
+                  echo "✅ CCache restored from release"
+                else
+                  echo "⚠️ Failed to extract ccache, will start fresh"
+                fi
+                cd ..
+                rm -f "${CCACHE_FILE}"
               else
-                echo "⚠️ Failed to extract ccache, will start fresh"
+                echo "⚠️ Downloaded ccache file is empty or doesn't exist, will start fresh"
+                rm -f "${CCACHE_FILE}"
               fi
-              cd ..
-              rm -f "${CCACHE_FILE}"
             else
               echo "⚠️ Failed to download ccache, will start fresh"
             fi

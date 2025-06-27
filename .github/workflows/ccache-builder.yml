@@ -92,15 +92,24 @@ jobs:
           # 尝试下载现有的ccache
           if wget --spider -q "$CCACHE_URL" 2>/dev/null; then
             echo "📦 Found existing ccache, downloading..."
-            if wget -q "$CCACHE_URL"; then
-              cd "$SOURCE_PATH" || exit 1
-              if tar -xzf "../${CCACHE_FILE}"; then
-                echo "✅ CCache extracted successfully"
+            if wget -q "$CCACHE_URL" -O "${CCACHE_FILE}"; then
+              echo "📋 Downloaded file info:"
+              ls -lh "${CCACHE_FILE}"
+              
+              # 验证文件确实存在且不为空
+              if [ -f "${CCACHE_FILE}" ] && [ -s "${CCACHE_FILE}" ]; then
+                cd "$SOURCE_PATH" || exit 1
+                if tar -xzf "../${CCACHE_FILE}"; then
+                  echo "✅ CCache extracted successfully"
+                else
+                  echo "⚠️ Failed to extract ccache, will start fresh"
+                fi
+                cd ..
+                rm -f "${CCACHE_FILE}" || true
               else
-                echo "⚠️ Failed to extract ccache, will start fresh"
+                echo "⚠️ Downloaded ccache file is empty or doesn't exist, will start fresh"
+                rm -f "${CCACHE_FILE}" || true
               fi
-              cd ..
-              rm -f "${CCACHE_FILE}" || true
             else
               echo "⚠️ Failed to download ccache, will start fresh"
             fi
@@ -122,20 +131,33 @@ jobs:
             echo "✅ Toolchain found, downloading..."
             # 重试机制下载
             for attempt in 1 2 3; do
-              if wget -q "${TOOLCHAIN_URL}"; then
+              if wget -q "${TOOLCHAIN_URL}" -O "${TOOLCHAIN_FILE}"; then
                 echo "🛠️ Toolchain downloaded successfully (attempt $attempt)"
-                cd "$SOURCE_PATH" || exit 1
-                if tar -xzf "../${TOOLCHAIN_FILE}"; then
-                  echo "📦 Toolchain extracted successfully"
-                  cd ..
-                  rm -f "${TOOLCHAIN_FILE}"
-                  break
+                echo "📋 Downloaded file info:"
+                ls -lh "${TOOLCHAIN_FILE}"
+                
+                # 验证文件确实存在且不为空
+                if [ -f "${TOOLCHAIN_FILE}" ] && [ -s "${TOOLCHAIN_FILE}" ]; then
+                  cd "$SOURCE_PATH" || exit 1
+                  if tar -xzf "../${TOOLCHAIN_FILE}"; then
+                    echo "📦 Toolchain extracted successfully"
+                    cd ..
+                    rm -f "${TOOLCHAIN_FILE}"
+                    break
+                  else
+                    echo "⚠️ Failed to extract toolchain (attempt $attempt)"
+                    cd ..
+                    rm -f "${TOOLCHAIN_FILE}"
+                    if [ $attempt -eq 3 ]; then
+                      echo "❌ Failed to extract toolchain after 3 attempts"
+                      exit 1
+                    fi
+                  fi
                 else
-                  echo "⚠️ Failed to extract toolchain (attempt $attempt)"
-                  cd ..
+                  echo "⚠️ Downloaded file is empty or doesn't exist (attempt $attempt)"
                   rm -f "${TOOLCHAIN_FILE}"
                   if [ $attempt -eq 3 ]; then
-                    echo "❌ Failed to extract toolchain after 3 attempts"
+                    echo "❌ Downloaded file validation failed after 3 attempts"
                     exit 1
                   fi
                 fi
