@@ -48,6 +48,8 @@ git clone https://github.com/sbwml/package_kernel_tcp-brutal package/kernel/tcp-
 git clone --depth 1 https://github.com/jerrykuku/luci-theme-argon package/new/luci-theme-argon
 git clone --depth 1 https://github.com/jerrykuku/luci-app-argon-config package/new/luci-app-argon-config
 
+git clone --depth 1 https://github.com/sundaqiang/openwrt-packages.git package/new/openwrt-packages
+
 sed -i '/<a href="https:\/\/github.com\/jerrykuku\/luci-theme-argon" target="_blank">ArgonTheme <%# vPKG_VERSION %><\/a> \//d' package/new/luci-theme-argon/luasrc/view/themes/argon/footer_login.htm
 sed -i '/<a href="https:\/\/github.com\/jerrykuku\/luci-theme-argon" target="_blank">ArgonTheme <%# vPKG_VERSION %><\/a> \//d' package/new/luci-theme-argon/luasrc/view/themes/argon/footer.htm
 
