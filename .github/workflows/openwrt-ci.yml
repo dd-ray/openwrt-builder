@@ -213,7 +213,6 @@ jobs:
         run: |
           cd "$SOURCE_PATH" || exit 1
           CCACHE_NAME="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
-          CCACHE_RELEASE="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
           
           # 检查是否有ccache数据需要上传
           # 使用更合理的阈值（10MB = 10240KB）
