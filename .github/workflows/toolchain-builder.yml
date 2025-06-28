@@ -29,6 +29,8 @@ env:
   SOURCE_PATH: "/openwrt/openwrt-source"
   TZ: Asia/Shanghai
   BUILDER_PATH: ${{ github.workspace }}
+  USE_CCACHE: "1"
+  CCACHE_DIR: "/openwrt/ccache"
 
 jobs:
   build-toolchain:
@@ -55,25 +57,45 @@ jobs:
         run: |
           # 验证matrix中的设备映射与脚本中的映射是否一致
           source script/device-toolchain-mapping.sh
-          
+
           EXPECTED_TOOLCHAIN=$(get_toolchain_type "${{ matrix.DEVICE }}")
           EXPECTED_PLATFORM=$(get_device_platform "${{ matrix.DEVICE }}")
-          
+
           if [ "$EXPECTED_TOOLCHAIN" != "${{ matrix.TOOLCHAIN_TYPE }}" ]; then
             echo "❌ Toolchain type mismatch for ${{ matrix.DEVICE }}"
             echo "   Expected: $EXPECTED_TOOLCHAIN"
             echo "   Matrix:   ${{ matrix.TOOLCHAIN_TYPE }}"
             exit 1
           fi
-          
+
           if [ "$EXPECTED_PLATFORM" != "${{ matrix.DEVICE_PLATFORM }}" ]; then
             echo "❌ Platform mismatch for ${{ matrix.DEVICE }}"
             echo "   Expected: $EXPECTED_PLATFORM"
             echo "   Matrix:   ${{ matrix.DEVICE_PLATFORM }}"
             exit 1
           fi
-          
+
           echo "✅ Device mapping validated: ${{ matrix.DEVICE }} -> ${{ matrix.TOOLCHAIN_TYPE }} (${{ matrix.DEVICE_PLATFORM }})"
+
+      - name: Generate cache keys
+        run: |
+          # 生成更精确的缓存键
+          CONFIG_HASH=$(find config/ -name "*.seed" -type f -exec cat {} \; | md5sum | cut -d' ' -f1)
+          SOURCE_HASH=$(echo "${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}" | md5sum | cut -d' ' -f1)
+
+          # Toolchain 缓存键 - 基于源码仓库和分支
+          TOOLCHAIN_CACHE_KEY="toolchain-${{ env.REPO_BRANCH }}-${{ matrix.TOOLCHAIN_TYPE }}-${SOURCE_HASH}"
+
+          # Build 缓存键 - 基于 toolchain + config
+          BUILD_CACHE_KEY="build-${{ env.REPO_BRANCH }}-${{ matrix.TOOLCHAIN_TYPE }}-${CONFIG_HASH}"
+
+
+          echo "TOOLCHAIN_CACHE_KEY=${TOOLCHAIN_CACHE_KEY}" >> $GITHUB_ENV
+          echo "BUILD_CACHE_KEY=${BUILD_CACHE_KEY}" >> $GITHUB_ENV
+
+          echo "📋 Cache keys generated:"
+          echo "  Toolchain: ${TOOLCHAIN_CACHE_KEY}"
+          echo "  Build: ${BUILD_CACHE_KEY}"
 
       - name: Check if toolchain exists
         if: ${{ github.event.inputs.FORCE_REBUILD != 'true' }}
@@ -81,7 +103,7 @@ jobs:
         run: |
           RELEASE_TAG="toolchain"
           TOOLCHAIN_FILE="toolchain-${{ env.REPO_BRANCH }}-${{ matrix.TOOLCHAIN_TYPE }}.tar.gz"
-          
+
           # 检查固定的toolchain release是否存在，以及是否包含对应的toolchain文件
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             # 检查具体的toolchain文件是否存在
@@ -137,18 +159,43 @@ jobs:
           cd "$SOURCE_PATH" || exit 1
           make defconfig
 
+      - name: Download dependencies
+        if: steps.check_toolchain.outputs.exists != 'true'
+        run: |
+          cd "$SOURCE_PATH" || exit 1
+          echo "📥 Downloading source packages..."
+          make download -j$(nproc) V=s
+
+          # 检查下载状态
+          find dl -size 0 -exec rm -f {} \; 2>/dev/null || true
+
       - name: Build toolchain only
         if: steps.check_toolchain.outputs.exists != 'true'
         run: |
           cd "$SOURCE_PATH" || exit 1
-          # 先修改 util-linux 配置，启用 libblkid/libuuid，再统一编译 tools
-          UTIL_MK=tools/util-linux/Makefile
-          sed -i 's/--disable-libblkid/--enable-libblkid/g' "$UTIL_MK"
-          sed -i 's/--disable-blkid/--enable-blkid/g'   "$UTIL_MK" || true
-          sed -i 's/--disable-libuuid/--enable-libuuid/g' "$UTIL_MK"
+          echo "🛠️ Building toolchain for ${{ matrix.TOOLCHAIN_TYPE }}..."
 
-          make tools/install -j$(nproc) V=s
-          make toolchain/install -j$(nproc) V=s
+          # 构建 tools
+          echo "🔨 Building tools..."
+          make tools/install -j$(nproc) V=s || make tools/install -j1 V=s
+
+          # 构建 toolchain
+          echo "🔧 Building toolchain..."
+          make toolchain/install -j$(nproc) V=s || make toolchain/install -j1 V=s
+
+          # 检查构建结果
+          echo "📋 Toolchain build completed for ${{ matrix.TOOLCHAIN_TYPE }}"
+          if [ -x "$(command -v ccache)" ] && [ "${{ env.USE_CCACHE }}" = "1" ]; then
+            echo "📊 CCache Statistics:"
+            ccache -s
+          fi
+      - name: Clean Files
+        id: clean
+        run: |
+          cd $SOURCE_PATH || exit 1
+          make clean
+          rm -rf tmp logs .config* dl
+          ./scripts/feeds clean
 
       - name: Package toolchain
         if: steps.check_toolchain.outputs.exists != 'true'
@@ -156,34 +203,48 @@ jobs:
           cd "$SOURCE_PATH" || exit 1
           TOOLCHAIN_NAME="toolchain-${{ env.REPO_BRANCH }}-${{ matrix.TOOLCHAIN_TYPE }}"
           echo "📦 Packaging toolchain for ${{ matrix.TOOLCHAIN_TYPE }}"
-          
+
           # 查找实际的toolchain目录
-          TOOLCHAIN_DIRS=$(find build_dir -name "toolchain-*" -type d 2>/dev/null || true)
-          STAGING_TOOLCHAIN_DIRS=$(find staging_dir -name "toolchain-*" -type d 2>/dev/null || true)
-          
-          if [ -z "$TOOLCHAIN_DIRS" ]; then
-            echo "❌ No toolchain directories found in build_dir"
+          TOOLCHAIN_DIRS=$(find staging_dir -name "toolchain-*" -type d 2>/dev/null || true)
+          HOST_DIRS=$(find staging_dir -name "host*" -type d 2>/dev/null || true)
+          BUILD_TOOLCHAIN_DIRS=$(find build_dir -name "toolchain-*" -type d 2>/dev/null || true)
+          BUILD_HOST_DIRS=$(find build_dir -name "host" -type d 2>/dev/null || true)
+
+          echo "🔍 Found directories to package:"
+          echo "  Staging toolchain: $TOOLCHAIN_DIRS"
+          echo "  Staging host: $HOST_DIRS"
+          echo "  Build toolchain: $BUILD_TOOLCHAIN_DIRS"
+          echo "  Build host: $BUILD_HOST_DIRS"
+
+          if [ -z "$TOOLCHAIN_DIRS" ] && [ -z "$BUILD_TOOLCHAIN_DIRS" ]; then
+            echo "❌ No toolchain directories found"
             exit 1
           fi
-          
-          echo "🔍 Found toolchain directories:"
-          echo "$TOOLCHAIN_DIRS"
-          echo "$STAGING_TOOLCHAIN_DIRS"
-          
+
+          # 创建打包目录列表
+          PACK_DIRS=""
+          [ -n "$TOOLCHAIN_DIRS" ] && PACK_DIRS="$PACK_DIRS staging_dir/toolchain-*"
+          [ -n "$HOST_DIRS" ] && PACK_DIRS="$PACK_DIRS staging_dir/host*"
+          [ -n "$BUILD_TOOLCHAIN_DIRS" ] && PACK_DIRS="$PACK_DIRS build_dir/toolchain-*"
+          [ -n "$BUILD_HOST_DIRS" ] && PACK_DIRS="$PACK_DIRS build_dir/host"
+
+          # 打包工具链，排除不必要的文件
           tar -czf "${TOOLCHAIN_NAME}.tar.gz" \
             --exclude='*.o' \
-            --exclude='*.a' \
+            --exclude='*.lo' \
+            --exclude='.libs' \
             --exclude='.git*' \
-            build_dir/toolchain-* \
-            build_dir/host \
-            build_dir/target-* \
-            staging_dir/toolchain-* \
-            staging_dir/host* \
-            staging_dir/target-* || true
-          
+            --exclude='*.tmp' \
+            --exclude='tmp.*' \
+            $PACK_DIRS 2>/dev/null || {
+              echo "⚠️ Some files failed to archive, continuing..."
+            }
+
           # 检查文件是否存在且不为空
           if [ -s "${TOOLCHAIN_NAME}.tar.gz" ]; then
+            FILE_SIZE=$(du -h "${TOOLCHAIN_NAME}.tar.gz" | cut -f1)
             echo "✅ Toolchain package created: $(ls -lh ${TOOLCHAIN_NAME}.tar.gz)"
+            echo "📦 Package size: $FILE_SIZE"
             echo "TOOLCHAIN_FILE=${TOOLCHAIN_NAME}.tar.gz" >> $GITHUB_ENV
           else
             echo "❌ Failed to create toolchain package"
@@ -201,32 +262,38 @@ jobs:
           replacesArtifacts: false
           body: |
             ## 🛠️ OpenWrt Toolchains 工具链集合
-            
-            这个release包含所有分支和架构的OpenWrt toolchain文件。
-            
+
+            这个release包含所有分支和架构的OpenWrt toolchain文件，经过优化的构建流程。
+
             ### 📋 可用的Toolchain文件
-            
+
             #### Main分支
             - `toolchain-main-aarch64_cortex-a53.tar.gz` - 适用于 nanopi-r5s 等 Cortex-A53 设备
             - `toolchain-main-aarch64_generic.tar.gz` - 适用于 cudy-tr3000 等通用 aarch64 设备  
             - `toolchain-main-x86_64.tar.gz` - 适用于 x86_64 设备
-            
+
             #### OpenWrt-24.10分支  
             - `toolchain-openwrt-24.10-aarch64_cortex-a53.tar.gz`
             - `toolchain-openwrt-24.10-aarch64_generic.tar.gz`
             - `toolchain-openwrt-24.10-x86_64.tar.gz`
-            
+
             ### 🔧 使用方法
             ```bash
             # 下载对应的toolchain文件
             wget https://github.com/${{ github.repository }}/releases/download/toolchain/toolchain-{分支}-{类型}.tar.gz
-            
+
             # 解压到OpenWrt源码目录
             tar -xzf toolchain-{分支}-{类型}.tar.gz -C /path/to/openwrt/source/
             ```
-            
+
+            ### ✨ 新特性
+            - 🚀 多级缓存策略，加速构建
+            - 💾 支持 ccache 编译缓存
+            - 🔧 优化的构建配置
+            - 📦 更小的工具链包体积
+
             ### 📝 最后更新
             - **时间**: ${{ github.run_id }}
             - **构建项**: ${{ matrix.TOOLCHAIN_TYPE }} (${{ env.REPO_BRANCH }})
           artifacts: |
-            ${{ env.SOURCE_PATH }}/${{ env.TOOLCHAIN_FILE }} 
+            ${{ env.SOURCE_PATH }}/${{ env.TOOLCHAIN_FILE }}

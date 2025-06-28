@@ -38,6 +38,8 @@ env:
   SOURCE_PATH: "/openwrt/openwrt-source"
   TZ: Asia/Shanghai
   BUILDER_PATH: ${{ github.workspace }}
+  USE_CCACHE: "1"
+  CCACHE_DIR: "/openwrt/ccache"
 
 jobs:
   build-ccache:

@@ -29,6 +29,8 @@ env:
   SOURCE_PATH: "/openwrt/openwrt-source"
   TZ: Asia/Shanghai
   BUILDER_PATH: ${{ github.workspace }}
+  USE_CCACHE: "1"
+  CCACHE_DIR: "/openwrt/ccache"
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -120,12 +122,13 @@ jobs:
           CCACHE_FILE="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}.tar.gz"
           CCACHE_URL="https://github.com/${{ github.repository }}/releases/download/${CCACHE_RELEASE}/${CCACHE_FILE}"
           
-          echo "🔍 Checking for ccache file: ${CCACHE_FILE}"
-          echo "📍 URL: ${CCACHE_URL}"
+          echo "🔍 Checking for existing ccache: $CCACHE_FILE"
+          echo "📍 CCache directory: ${{ env.CCACHE_DIR }}"
           
-          if wget -q --spider "${CCACHE_URL}"; then
-            echo "📥 Downloading ccache from release..."
-            if wget -q "${CCACHE_URL}" -O "${CCACHE_FILE}"; then
+          # 尝试下载现有的ccache
+          if wget --spider -q "$CCACHE_URL" 2>/dev/null; then
+            echo "📦 Found existing ccache, downloading..."
+            if wget -q "$CCACHE_URL" -O "${CCACHE_FILE}"; then
               echo "📋 Downloaded file info:"
               ls -lh "${CCACHE_FILE}"
               
@@ -134,25 +137,22 @@ jobs:
                 # 使用绝对路径避免路径问题
                 CCACHE_ABS_PATH="$(pwd)/${CCACHE_FILE}"
                 cd "$SOURCE_PATH" || exit 1
-                echo "📦 Extracting ccache..."
                 if tar -xzf "${CCACHE_ABS_PATH}"; then
-                  echo "✅ CCache restored from release"
+                  echo "✅ CCache extracted successfully"
                 else
                   echo "⚠️ Failed to extract ccache, will start fresh"
                 fi
                 cd - >/dev/null
-                rm -f "${CCACHE_FILE}"
+                rm -f "${CCACHE_FILE}" || true
               else
                 echo "⚠️ Downloaded ccache file is empty or doesn't exist, will start fresh"
-                rm -f "${CCACHE_FILE}"
+                rm -f "${CCACHE_FILE}" || true
               fi
             else
               echo "⚠️ Failed to download ccache, will start fresh"
             fi
           else
-            echo "⚠️ No ccache file found: ${CCACHE_FILE}, will start fresh"
-            echo "💡 可用的ccache文件:"
-            gh release view ccache --json assets | jq -r '.assets[].name' | grep "ccache-" || echo "No ccache files found"
+            echo "🆕 No existing ccache found, starting fresh"
           fi
 
       - name: Generate cache key
@@ -169,7 +169,6 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: |
-            ${{ env.SOURCE_PATH }}/build_dir/target-*/linux-*/tmp
             ${{ env.SOURCE_PATH }}/dl
             ${{ env.SOURCE_PATH }}/feeds
           key: ${{ env.BUILD_PACKAGES_CACHE_KEY }}
@@ -188,6 +187,27 @@ jobs:
 
       - name: Make download
         run: ./script/tool.sh make_download
+      - name: Configure ccache
+        if: ${{ github.event.inputs.CCACHE == 'true' }}
+        run: |
+          echo "🔧 Configuring ccache..."
+          echo "📍 CCache directory: ${{ env.CCACHE_DIR }}"
+          echo "📍 USE_CCACHE: ${{ env.USE_CCACHE }}"
+          
+          # 确保 ccache 目录存在
+          mkdir -p "${{ env.CCACHE_DIR }}"
+          
+          # 配置 ccache 环境变量
+          echo "CCACHE_DIR=${{ env.CCACHE_DIR }}" >> $GITHUB_ENV
+          echo "USE_CCACHE=${{ env.USE_CCACHE }}" >> $GITHUB_ENV
+          
+          # 检查ccache是否可用
+          if [ -x "$(command -v ccache)" ]; then
+            echo "✅ CCache is available"
+            ccache -s
+          else
+            echo "⚠️ CCache not found, will use regular compilation"
+          fi
       - name: Compile firmware
         run: ./script/tool.sh compile_firmware
       - name: Clean Packages
@@ -208,37 +228,43 @@ jobs:
           name: OpenWrt firmware ${{ matrix.DEVICE }}
           path: |
             ${{env.SOURCE_PATH}}/bin/targets/
-      - name: Update ccache release
+      - name: Package ccache
         if: ${{ github.event.inputs.CCACHE == 'true' }}
         run: |
           cd "$SOURCE_PATH" || exit 1
           CCACHE_NAME="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
           
-          # 检查是否有ccache数据需要上传
-          # 使用更合理的阈值（10MB = 10240KB）
-          CCACHE_SIZE_KB=$(du -s .ccache | cut -f1)
-          CCACHE_THRESHOLD=10240
-          
-          if [ -d ".ccache" ] && [ "$CCACHE_SIZE_KB" -gt "$CCACHE_THRESHOLD" ]; then
-            echo "📦 Packaging updated ccache..."
-            echo "💾 CCache size: $(du -sh .ccache | cut -f1)"
-            tar -czf "${CCACHE_NAME}.tar.gz" .ccache/
+          # 打包ccache目录
+          if [ -d ".ccache" ]; then
+            # 检查ccache大小，使用更合理的阈值（10MB = 10240KB）
+            CCACHE_SIZE_KB=$(du -s .ccache | cut -f1)
+            CCACHE_THRESHOLD=10240
             
-            # 检查ccache统计信息
-            if [ -x "$(command -v ccache)" ]; then
-              echo "📊 Final CCache Statistics:"
-              ccache -s
+            if [ "$CCACHE_SIZE_KB" -gt "$CCACHE_THRESHOLD" ]; then
+              echo "📦 Packaging updated ccache..."
+              echo "💾 CCache size: $(du -sh .ccache | cut -f1)"
+              tar -czf "${CCACHE_NAME}.tar.gz" .ccache/
+              echo "✅ CCache package created: $(ls -lh ${CCACHE_NAME}.tar.gz)"
+              
+              # 检查ccache统计信息
+              if [ -x "$(command -v ccache)" ]; then
+                echo "📊 CCache Statistics:"
+                ccache -s
+              fi
+              
+              echo "CCACHE_FILE=${CCACHE_NAME}.tar.gz" >> $GITHUB_ENV
+              echo "SHOULD_UPDATE_CCACHE=true" >> $GITHUB_ENV
+              echo "✅ CCache will be updated (${CCACHE_SIZE_KB}KB > ${CCACHE_THRESHOLD}KB)"
+            else
+              echo "⚠️ CCache too small for upload (${CCACHE_SIZE_KB}KB <= ${CCACHE_THRESHOLD}KB)"
+              echo "SHOULD_UPDATE_CCACHE=false" >> $GITHUB_ENV
             fi
-            
-            echo "CCACHE_FILE=${CCACHE_NAME}.tar.gz" >> $GITHUB_ENV
-            echo "SHOULD_UPDATE_CCACHE=true" >> $GITHUB_ENV
-            echo "✅ CCache will be updated (${CCACHE_SIZE_KB}KB > ${CCACHE_THRESHOLD}KB)"
           else
-            echo "⚠️ CCache too small for upload (${CCACHE_SIZE_KB}KB <= ${CCACHE_THRESHOLD}KB)"
+            echo "❌ No ccache directory found"
             echo "SHOULD_UPDATE_CCACHE=false" >> $GITHUB_ENV
           fi
 
-      - name: Create/Update ccache release
+      - name: Create ccache release
         if: ${{ github.event.inputs.CCACHE == 'true' && env.SHOULD_UPDATE_CCACHE == 'true' }}
         uses: ncipollo/release-action@v1.14.0
         with:
@@ -287,7 +313,6 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: |
-            ${{ env.SOURCE_PATH }}/build_dir/target-*/linux-*/tmp
             ${{ env.SOURCE_PATH }}/dl
             ${{ env.SOURCE_PATH }}/feeds
           key: ${{ env.BUILD_PACKAGES_CACHE_KEY }}
