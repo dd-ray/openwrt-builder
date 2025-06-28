@@ -19,11 +19,22 @@ function use_turboacc() {
     popd
 }
 
-function use_mosdns() {
-    # Mosdns
-    rm -rf "feeds/packages/net/v2ray-geodata"
-    git clone https://github.com/sbwml/luci-app-mosdns -b v5 package/new/mosdns
-    git clone https://github.com/sbwml/v2ray-geodata package/new/v2ray-geodata
+function update_luci_app_menu() {
+    # 修改 QoS Nftables 插件菜单配置
+    echo '修改 QoS Nftables 插件菜单：从 services 移动到 network，名称改为 QoS'
+    sed -i 's/entry(\["admin", "services", "nft-qos"\]/entry(["admin", "network", "nft-qos"]/g' feeds/luci/applications/luci-app-nft-qos/luasrc/controller/nft-qos.lua 2>/dev/null || true
+    sed -i 's/_("Qos Nftables")/_("QoS")/g' feeds/luci/applications/luci-app-nft-qos/luasrc/controller/nft-qos.lua 2>/dev/null || true
+
+    # 修改 UPnP 插件菜单配置
+    echo '修改 UPnP 插件菜单：从 services 移动到 network，名称改为 UPnP'
+    sed -i 's/"admin\/services"/"admin\/network"/g' feeds/luci/applications/luci-app-upnp/root/usr/share/luci/menu.d/luci-app-upnp.json 2>/dev/null || true
+    sed -i 's/"title": "UPnP IGD & PCP"/"title": "UPnP"/g' feeds/luci/applications/luci-app-upnp/root/usr/share/luci/menu.d/luci-app-upnp.json 2>/dev/null || true
+    # 修改 ttyd 插件菜单配置
+    echo '修改 ttyd 插件菜单：从 services 移动到 system'
+    sed -i 's#admin/services/ttyd#admin/system/ttyd#g' feeds/luci/applications/luci-app-ttyd/root/usr/share/luci/menu.d/luci-app-ttyd.json 2>/dev/null || true
+    # 修改 nlbwmon 插件菜单配置
+    echo '修改 nlbwmon 插件菜单：从 services 移动到 network'
+    sed -i 's#admin/services/nlbw#admin/network/nlbw#g' feeds/luci/applications/luci-app-nlbwmon/root/usr/share/luci/menu.d/luci-app-nlbwmon.json 2>/dev/null || true
 }
 
 pushd $SOURCE_PATH
@@ -63,4 +74,5 @@ sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' 
 use_turboacc
 # 修复 turboacc 的 luci-nginx 依赖
 sed -i 's/+luci +luci-compat/+luci-nginx +luci-compat/g' package/turboacc/luci-app-turboacc/Makefile
+update_luci_app_menu
 popd
