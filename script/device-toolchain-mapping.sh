@@ -8,10 +8,10 @@ function get_toolchain_type() {
     
     case "$device" in
         "nanopi-r5s")
-            echo "aarch64_cortex-a53"
+            echo "aarch64_generic"
             ;;
         "cudy-tr3000")
-            echo "aarch64_generic"
+            echo "aarch64_cortex-a53"
             ;;
         "x86_64")
             echo "x86_64"
@@ -45,10 +45,10 @@ function get_compatible_devices() {
     
     case "$toolchain_type" in
         "aarch64_cortex-a53")
-            echo "nanopi-r5s"
+            echo "cudy-tr3000"
             ;;
         "aarch64_generic")
-            echo "cudy-tr3000"
+            echo "nanopi-r5s"
             ;;
         "x86_64")
             echo "x86_64"
@@ -65,14 +65,14 @@ function list_all_mappings() {
     echo "┌─────────────────┬────────────────────┬──────────────┐"
     echo "│ 设备名称        │ Toolchain类型      │ 架构平台     │"
     echo "├─────────────────┼────────────────────┼──────────────┤"
-    echo "│ nanopi-r5s      │ aarch64_cortex-a53 │ arm64        │"
-    echo "│ cudy-tr3000     │ aarch64_generic    │ arm64        │"
+    echo "│ nanopi-r5s      │ aarch64_generic    │ arm64        │"
+    echo "│ cudy-tr3000     │ aarch64_cortex-a53 │ arm64        │"
     echo "│ x86_64          │ x86_64             │ amd64        │"
     echo "└─────────────────┴────────────────────┴──────────────┘"
     echo ""
     echo "💡 说明："
-    echo "  - nanopi-r5s使用Cortex-A53优化的toolchain"
-    echo "  - cudy-tr3000使用通用aarch64 toolchain"
+    echo "  - nanopi-r5s使用通用aarch64 toolchain"
+    echo "  - cudy-tr3000使用Cortex-A53优化的toolchain"
     echo "  - 不同toolchain类型不兼容，需要分别构建"
 }
 
