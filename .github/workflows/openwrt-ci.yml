@@ -158,25 +158,24 @@ jobs:
       - name: Generate cache key
         if: ${{ github.event.inputs.CCACHE == 'true' }}
         run: |
-          # 生成更准确的缓存key，包含toolchain类型和配置文件哈希
+          # 生成缓存key，只缓存非toolchain相关的构建产物
           CONFIG_HASH=$(find config/ -name "*.seed" -type f -exec cat {} \; | md5sum | cut -d' ' -f1)
-          CACHE_KEY="build-dir-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}-${CONFIG_HASH}"
-          echo "BUILD_DIR_CACHE_KEY=${CACHE_KEY}" >> $GITHUB_ENV
-          echo "📋 Build dir cache key: ${CACHE_KEY}"
+          CACHE_KEY="build-packages-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}-${CONFIG_HASH}"
+          echo "BUILD_PACKAGES_CACHE_KEY=${CACHE_KEY}" >> $GITHUB_ENV
+          echo "📋 Build packages cache key: ${CACHE_KEY}"
 
-      - name: Restore build_dir cache
+      - name: Restore build packages cache
         if: ${{ github.event.inputs.CCACHE == 'true' }}
         uses: actions/cache/restore@v4
         with:
           path: |
-            ${{ env.SOURCE_PATH }}/build_dir/host
-            ${{ env.SOURCE_PATH }}/build_dir/target-*
-            ${{ env.SOURCE_PATH }}/staging_dir/host*
-            ${{ env.SOURCE_PATH }}/staging_dir/target-*
-          key: ${{ env.BUILD_DIR_CACHE_KEY }}
+            ${{ env.SOURCE_PATH }}/build_dir/target-*/linux-*/tmp
+            ${{ env.SOURCE_PATH }}/dl
+            ${{ env.SOURCE_PATH }}/feeds
+          key: ${{ env.BUILD_PACKAGES_CACHE_KEY }}
           restore-keys: |
-            build-dir-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}-
-            build-dir-${{ env.REPO_BRANCH }}-
+            build-packages-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}-
+            build-packages-${{ env.REPO_BRANCH }}-
 
       - name: Update feeds
         run: ./script/tool.sh update_feeds
@@ -284,13 +283,12 @@ jobs:
           artifacts: |
             ${{ env.SOURCE_PATH }}/${{ env.CCACHE_FILE }}
 
-      - name: Save build_dir cache
+      - name: Save build packages cache
         if: ${{ github.event.inputs.CCACHE == 'true' }}
         uses: actions/cache/save@v4
         with:
           path: |
-            ${{ env.SOURCE_PATH }}/build_dir/host
-            ${{ env.SOURCE_PATH }}/build_dir/target-*
-            ${{ env.SOURCE_PATH }}/staging_dir/host*
-            ${{ env.SOURCE_PATH }}/staging_dir/target-*
-          key: ${{ env.BUILD_DIR_CACHE_KEY }}
+            ${{ env.SOURCE_PATH }}/build_dir/target-*/linux-*/tmp
+            ${{ env.SOURCE_PATH }}/dl
+            ${{ env.SOURCE_PATH }}/feeds
+          key: ${{ env.BUILD_PACKAGES_CACHE_KEY }}
