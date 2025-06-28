@@ -38,10 +38,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - TOOLCHAIN_TYPE: "aarch64_cortex-a53"
+          - TOOLCHAIN_TYPE: "aarch64_generic"
             DEVICE_PLATFORM: "arm64"
             DEVICE: "nanopi-r5s"
-          - TOOLCHAIN_TYPE: "aarch64_generic"
+          - TOOLCHAIN_TYPE: "aarch64_cortex-a53"
             DEVICE_PLATFORM: "arm64"
             DEVICE: "cudy-tr3000"
           - TOOLCHAIN_TYPE: "x86_64"
@@ -143,6 +143,24 @@ jobs:
           cd "$SOURCE_PATH" || exit 1
           make tools/install -j$(nproc) V=s
           make toolchain/install -j$(nproc) V=s
+
+      # 重新编译 util-linux 以启用 libblkid，解决 e2fsprogs 依赖
+      - name: Rebuild util-linux with libblkid
+        if: steps.check_toolchain.outputs.exists != 'true'
+        run: |
+          cd "$SOURCE_PATH" || exit 1
+          echo "🔧 Enabling libblkid in tools/util-linux"
+          # 临时修改工具链 util-linux 配置，去掉禁用选项
+          UTIL_MK=tools/util-linux/Makefile
+          sed -i 's/--disable-libblkid/--enable-libblkid/g' "$UTIL_MK"
+          sed -i 's/--disable-blkid/--enable-blkid/g' "$UTIL_MK" || true
+          sed -i 's/--disable-libuuid/--enable-libuuid/g' "$UTIL_MK"
+
+          # 清理并重新编译 util-linux，仅安装到 staging_dir/host
+          make -C tools/util-linux clean V=s
+          make tools/util-linux/compile -j$(nproc) V=s
+          make tools/util-linux/install V=s
+          echo "✅ util-linux rebuilt with libblkid"
 
       - name: Package toolchain
         if: steps.check_toolchain.outputs.exists != 'true'

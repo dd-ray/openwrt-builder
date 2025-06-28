@@ -71,7 +71,7 @@ jobs:
           echo "📋 Device: ${{ matrix.DEVICE }} -> Platform: ${DEVICE_PLATFORM}, Toolchain: ${TOOLCHAIN_TYPE}"
 
       - name: Download toolchain from release
-        if: ${{ github.event.inputs.CCACHE == 'true' }}
+        # 无条件执行，toolchain 是必须项
         run: |
           TOOLCHAIN_RELEASE="toolchain"
           TOOLCHAIN_FILE="toolchain-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}.tar.gz"
@@ -96,19 +96,19 @@ jobs:
                 if tar -xzf "${TOOLCHAIN_ABS_PATH}"; then
                   echo "✅ Toolchain restored from release"
                 else
-                  echo "⚠️ Failed to extract toolchain, will build from scratch"
+                  echo "⚠️ 无法解压 toolchain，将在后续步骤自动构建完整工具链"
                 fi
                 cd - >/dev/null
                 rm -f "${TOOLCHAIN_FILE}"
               else
-                echo "⚠️ Downloaded file is empty or doesn't exist, will build from scratch"
+                echo "⚠️ 下载的 toolchain 文件为空或不存在，将在后续步骤自动构建完整工具链"
                 rm -f "${TOOLCHAIN_FILE}"
               fi
             else
-              echo "⚠️ Failed to download toolchain, will build from scratch"
+              echo "⚠️ toolchain 下载失败，将在后续步骤自动构建完整工具链"
             fi
           else
-            echo "⚠️ No toolchain file found: ${TOOLCHAIN_FILE}, will build from scratch"
+            echo "⚠️ 未找到对应的 toolchain 文件: ${TOOLCHAIN_FILE}，将自动构建"
             echo "💡 可用的toolchain文件:"
             gh release view toolchain --json assets | jq -r '.assets[].name' | grep "toolchain-" || echo "No toolchain files found"
           fi
