@@ -204,29 +204,40 @@ jobs:
           TOOLCHAIN_NAME="toolchain-${{ env.REPO_BRANCH }}-${{ matrix.TOOLCHAIN_TYPE }}"
           echo "📦 Packaging toolchain for ${{ matrix.TOOLCHAIN_TYPE }}"
 
-          # 查找实际的toolchain目录
-          TOOLCHAIN_DIRS=$(find staging_dir -name "toolchain-*" -type d 2>/dev/null || true)
-          HOST_DIRS=$(find staging_dir -name "host*" -type d 2>/dev/null || true)
-          BUILD_TOOLCHAIN_DIRS=$(find build_dir -name "toolchain-*" -type d 2>/dev/null || true)
-          BUILD_HOST_DIRS=$(find build_dir -name "host" -type d 2>/dev/null || true)
+          # 检查目录是否存在
+          echo "🔍 Checking directories to package:"
+          
+          BUILD_DIR_EXISTS=false
+          STAGING_DIR_EXISTS=false
+          
+          if [ -d "build_dir" ]; then
+            BUILD_DIR_EXISTS=true
+            echo "  ✅ build_dir exists"
+            ls -la build_dir/ | head -10
+          else
+            echo "  ❌ build_dir not found"
+          fi
+          
+          if [ -d "staging_dir" ]; then
+            STAGING_DIR_EXISTS=true
+            echo "  ✅ staging_dir exists"
+            ls -la staging_dir/ | head -10
+          else
+            echo "  ❌ staging_dir not found"
+          fi
 
-          echo "🔍 Found directories to package:"
-          echo "  Staging toolchain: $TOOLCHAIN_DIRS"
-          echo "  Staging host: $HOST_DIRS"
-          echo "  Build toolchain: $BUILD_TOOLCHAIN_DIRS"
-          echo "  Build host: $BUILD_HOST_DIRS"
-
-          if [ -z "$TOOLCHAIN_DIRS" ] && [ -z "$BUILD_TOOLCHAIN_DIRS" ]; then
-            echo "❌ No toolchain directories found"
+          # 确保至少有一个目录存在
+          if [ "$BUILD_DIR_EXISTS" = "false" ] && [ "$STAGING_DIR_EXISTS" = "false" ]; then
+            echo "❌ Neither build_dir nor staging_dir found"
             exit 1
           fi
 
-          # 创建打包目录列表
+          # 直接收集 build_dir 和 staging_dir 目录
           PACK_DIRS=""
-          [ -n "$TOOLCHAIN_DIRS" ] && PACK_DIRS="$PACK_DIRS staging_dir/toolchain-*"
-          [ -n "$HOST_DIRS" ] && PACK_DIRS="$PACK_DIRS staging_dir/host*"
-          [ -n "$BUILD_TOOLCHAIN_DIRS" ] && PACK_DIRS="$PACK_DIRS build_dir/toolchain-*"
-          [ -n "$BUILD_HOST_DIRS" ] && PACK_DIRS="$PACK_DIRS build_dir/host"
+          [ "$BUILD_DIR_EXISTS" = "true" ] && PACK_DIRS="$PACK_DIRS build_dir"
+          [ "$STAGING_DIR_EXISTS" = "true" ] && PACK_DIRS="$PACK_DIRS staging_dir"
+
+          echo "📦 Packaging directories: $PACK_DIRS"
 
           # 打包工具链，排除不必要的文件
           tar -czf "${TOOLCHAIN_NAME}.tar.gz" \
@@ -268,8 +279,8 @@ jobs:
             ### 📋 可用的Toolchain文件
 
             #### Main分支
-            - `toolchain-main-aarch64_cortex-a53.tar.gz` - 适用于 nanopi-r5s 等 Cortex-A53 设备
-            - `toolchain-main-aarch64_generic.tar.gz` - 适用于 cudy-tr3000 等通用 aarch64 设备  
+            - `toolchain-main-aarch64_cortex-a53.tar.gz` - 适用于 cudy-tr3000 等 Cortex-A53 设备
+            - `toolchain-main-aarch64_generic.tar.gz` - 适用于 nanopi-r5s 等通用 aarch64 设备  
             - `toolchain-main-x86_64.tar.gz` - 适用于 x86_64 设备
 
             #### OpenWrt-24.10分支  
