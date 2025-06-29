@@ -262,15 +262,33 @@ jobs:
             exit 1
           fi
 
-      - name: Create toolchain release
+      - name: Final check before upload
         if: steps.check_toolchain.outputs.exists != 'true'
+        id: final_check
+        run: |
+          RELEASE_TAG="toolchain"
+          TOOLCHAIN_FILE="toolchain-${{ env.REPO_BRANCH }}-${{ matrix.TOOLCHAIN_TYPE }}.tar.gz"
+
+          # 上传前最后检查一次，防止并发job冲突
+          if gh release view "$RELEASE_TAG" --json assets | jq -e ".assets[] | select(.name == \"$TOOLCHAIN_FILE\")" >/dev/null 2>&1; then
+            echo "upload_needed=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Toolchain file was uploaded by another job: $TOOLCHAIN_FILE"
+          else
+            echo "upload_needed=true" >> $GITHUB_OUTPUT
+            echo "✅ Safe to upload: $TOOLCHAIN_FILE"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create toolchain release
+        if: steps.check_toolchain.outputs.exists != 'true' && steps.final_check.outputs.upload_needed == 'true'
         uses: ncipollo/release-action@v1.14.0
         with:
           name: "OpenWrt Toolchains"
           allowUpdates: true
           tag: "toolchain"
           commit: main
-          replacesArtifacts: false
+          replacesArtifacts: true
           body: |
             ## 🛠️ OpenWrt Toolchains 工具链集合
 
