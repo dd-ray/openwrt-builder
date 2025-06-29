@@ -215,7 +215,7 @@ jobs:
       - name: Create release
         uses: ncipollo/release-action@v1.14.0
         with:
-          name: OpenWrt-${{ env.REPO_BRANCH }}
+          name: OpenWrt-${{ env.REPO_BRANCH }}-${{ matrix.DEVICE }}
           allowUpdates: true
           tag: ${{ env.REPO_BRANCH }}
           commit: main
