@@ -44,7 +44,7 @@ jobs:
       - name: Space cleanup
         uses: dd-ray/github-actions@free-disk
         with:
-          build-mount-path: "${{ env.BUILDER_PATH }}"
+          build-mount-path: "${{ env.SOURCE_PATH }}"
       - name: Build System Setup
         uses: dd-ray/github-actions@openwrt-build-setup
       - name: Install LLVM
