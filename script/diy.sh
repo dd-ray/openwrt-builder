@@ -22,8 +22,8 @@ function use_turboacc() {
 function update_luci_app_menu() {
     # 修改 QoS Nftables 插件菜单配置
     echo '修改 QoS Nftables 插件菜单：从 services 移动到 network，名称改为 QoS'
-    sed -i 's/entry(\["admin", "services", "nft-qos"\]/entry(["admin", "network", "nft-qos"]/g' feeds/luci/applications/luci-app-nft-qos/luasrc/controller/nft-qos.lua 2>/dev/null || true
-    sed -i 's/_("Qos Nftables")/_("QoS")/g' feeds/luci/applications/luci-app-nft-qos/luasrc/controller/nft-qos.lua 2>/dev/null || true
+    sed -i 's#entry({"admin", "services", "nft-qos"}#entry({"admin", "network", "nft-qos"}#g' feeds/luci/applications/luci-app-nft-qos/luasrc/controller/nft-qos.lua 2>/dev/null || true
+    sed -i 's#QoS over Nftables#QoS#g' feeds/luci/applications/luci-app-nft-qos/luasrc/controller/nft-qos.lua 2>/dev/null || true
 
     # 修改 UPnP 插件菜单配置
     echo '修改 UPnP 插件菜单：从 services 移动到 network，名称改为 UPnP'
