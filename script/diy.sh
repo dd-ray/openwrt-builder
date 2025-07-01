@@ -27,14 +27,18 @@ function update_luci_app_menu() {
 
     # 修改 UPnP 插件菜单配置
     echo '修改 UPnP 插件菜单：从 services 移动到 network，名称改为 UPnP'
-    sed -i 's/"admin\/services"/"admin\/network"/g' feeds/luci/applications/luci-app-upnp/root/usr/share/luci/menu.d/luci-app-upnp.json 2>/dev/null || true
+    sed -i 's#admin/services#admin/network#g' feeds/luci/applications/luci-app-upnp/root/usr/share/luci/menu.d/luci-app-upnp.json 2>/dev/null || true
     sed -i 's/"title": "UPnP IGD & PCP"/"title": "UPnP"/g' feeds/luci/applications/luci-app-upnp/root/usr/share/luci/menu.d/luci-app-upnp.json 2>/dev/null || true
     # 修改 ttyd 插件菜单配置
     echo '修改 ttyd 插件菜单：从 services 移动到 system'
     sed -i 's#admin/services/ttyd#admin/system/ttyd#g' feeds/luci/applications/luci-app-ttyd/root/usr/share/luci/menu.d/luci-app-ttyd.json 2>/dev/null || true
     # 修改 nlbwmon 插件菜单配置
     echo '修改 nlbwmon 插件菜单：从 services 移动到 network'
-    sed -i 's#admin/services/nlbw#admin/network/nlbw#g' feeds/luci/applications/luci-app-nlbwmon/root/usr/share/luci/menu.d/luci-app-nlbwmon.json 2>/dev/null || true
+    sed -i 's#admin/services#admin/network#g' feeds/luci/applications/luci-app-nlbwmon/root/usr/share/luci/menu.d/luci-app-nlbwmon.json 2>/dev/null || true
+    # 修改 udpxy 插件菜单配置
+    echo '修改 udpxy 插件菜单：从 services 移动到 network'
+    sed -i 's#admin/services#admin/network#g' feeds/luci/applications/luci-app-udpxy/root/usr/share/luci/menu.d/luci-app-udpxy.json 2>/dev/null || true
+
 }
 
 pushd $SOURCE_PATH
