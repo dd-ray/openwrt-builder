@@ -69,6 +69,10 @@ sed -i '/<a href="https:\/\/github.com\/jerrykuku\/luci-theme-argon" target="_bl
 sed -i '/<a href="https:\/\/github.com\/jerrykuku\/luci-theme-argon" target="_blank">ArgonTheme <%# vPKG_VERSION %><\/a> \//d' package/new/luci-theme-argon/luasrc/view/themes/argon/footer.htm
 
 # Mosdns
+if [ "$REPO_BRANCH" == "openwrt-24.10" ]; then
+    rm -rf feeds/packages/lang/golang
+    git clone https://github.com/sbwml/packages_lang_golang -b 24.x feeds/packages/lang/golang
+fi
 rm -rf "feeds/packages/net/v2ray-geodata"
 git clone https://github.com/sbwml/luci-app-mosdns -b v5 package/new/mosdns
 git clone https://github.com/sbwml/v2ray-geodata package/new/v2ray-geodata
