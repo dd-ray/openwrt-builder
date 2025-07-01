@@ -56,8 +56,8 @@ function build_config() {
   fi
 
   if [ -f "${BUILDER_PATH}/script/diy.sh" ]; then
-  chmod +x "${BUILDER_PATH}/script/diy.sh"
-  bash -c "${BUILDER_PATH}/script/diy.sh ${SOURCE_PATH} ${BUILDER_PATH}"
+    bash -c "${BUILDER_PATH}/script/diy.sh ${SOURCE_PATH} ${BUILDER_PATH}"
+  fi
   du -h --max-depth=2 ./
   echo "当前配置=====start"
   cat .config
