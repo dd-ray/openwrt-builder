@@ -29,7 +29,6 @@ env:
   SOURCE_PATH: "${{ github.workspace }}/openwrt-source"
   TZ: Asia/Shanghai
   BUILDER_PATH: ${{ github.workspace }}
-  LATEST_RELEASE: "OpenWrt-v24.10.0"
 jobs:
   build:
     runs-on: ubuntu-latest
