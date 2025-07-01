@@ -4,33 +4,32 @@ on:
   workflow_dispatch:
     inputs:
       REPO_URL:
-        description: "OpenWrt仓库"
+        description: 'OpenWrt仓库'
         required: true
-        default: "openwrt/openwrt"
+        default: 'openwrt/openwrt'
         type: choice
         options:
-          - "openwrt/openwrt"
+          - 'openwrt/openwrt'
       REPO_BRANCH:
-        description: "OpenWrt分支"
+        description: 'OpenWrt分支'
         required: true
-        default: "main"
+        default: 'main'
         type: choice
         options:
-          - "main"
-          - "openwrt-24.10"
+          - 'main'
+          - 'openwrt-24.10'
       CCACHE:
-        description: "Enable ccache (Use Cache to speed up next build)"
+        description: 'Enable ccache (Use Cache to speed up next build)'
         type: boolean
         default: true
 
 env:
   REPO_URL: "https://github.com/${{ github.event.inputs.REPO_URL }}.git"
   REPO_BRANCH: ${{ github.event.inputs.REPO_BRANCH }}
-  SOURCE_PATH: "/openwrt/openwrt-source"
+  SOURCE_PATH: "${{ github.workspace }}/openwrt-source"
   TZ: Asia/Shanghai
   BUILDER_PATH: ${{ github.workspace }}
-  USE_CCACHE: "1"
-  CCACHE_DIR: "/openwrt/ccache"
+  LATEST_RELEASE: "OpenWrt-v24.10.0"
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -45,7 +44,7 @@ jobs:
       - name: Space cleanup
         uses: dd-ray/github-actions@free-disk
         with:
-          build-mount-path: /openwrt
+          build-mount-path: "${{ env.BUILDER_PATH }}"
       - name: Build System Setup
         uses: dd-ray/github-actions@openwrt-build-setup
       - name: Install LLVM
@@ -53,266 +52,47 @@ jobs:
       - name: Clone OpenWrt
         run: |
           ./script/tool.sh clone
-          ln -sf ${{ env.SOURCE_PATH }} ${{ github.workspace }}/openwrt-source
-      - name: Set Environment Variables
-        run: |
-          # 使用device-toolchain-mapping.sh脚本统一管理映射关系
-          source script/device-toolchain-mapping.sh
-          
-          TOOLCHAIN_TYPE=$(get_toolchain_type "${{ matrix.DEVICE }}")
-          DEVICE_PLATFORM=$(get_device_platform "${{ matrix.DEVICE }}")
-          
-          if [ "$TOOLCHAIN_TYPE" = "unknown" ] || [ "$DEVICE_PLATFORM" = "unknown" ]; then
-            echo "❌ Unsupported device: ${{ matrix.DEVICE }}"
-            ./script/device-toolchain-mapping.sh list-mappings
-            exit 1
-          fi
-          
-          echo "DEVICE_PLATFORM=${DEVICE_PLATFORM}" >> $GITHUB_ENV
-          echo "TOOLCHAIN_TYPE=${TOOLCHAIN_TYPE}" >> $GITHUB_ENV
-          echo "📋 Device: ${{ matrix.DEVICE }} -> Platform: ${DEVICE_PLATFORM}, Toolchain: ${TOOLCHAIN_TYPE}"
-
-      - name: Download toolchain from release
-        # 无条件执行，toolchain 是必须项
-        run: |
-          TOOLCHAIN_RELEASE="toolchain"
-          TOOLCHAIN_FILE="toolchain-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}.tar.gz"
-          TOOLCHAIN_URL="https://github.com/${{ github.repository }}/releases/download/${TOOLCHAIN_RELEASE}/${TOOLCHAIN_FILE}"
-          
-          echo "🔍 Checking for toolchain file: ${TOOLCHAIN_FILE}"
-          echo "📋 Toolchain type: ${{ env.TOOLCHAIN_TYPE }}"
-          echo "📍 URL: ${TOOLCHAIN_URL}"
-          
-          if wget -q --spider "${TOOLCHAIN_URL}"; then
-            echo "📥 Downloading toolchain from release..."
-            if wget -q "${TOOLCHAIN_URL}" -O "${TOOLCHAIN_FILE}"; then
-              echo "📋 Downloaded file info:"
-              ls -lh "${TOOLCHAIN_FILE}"
-              
-              # 验证文件确实存在且不为空
-              if [ -f "${TOOLCHAIN_FILE}" ] && [ -s "${TOOLCHAIN_FILE}" ]; then
-                # 使用绝对路径避免路径问题
-                TOOLCHAIN_ABS_PATH="$(pwd)/${TOOLCHAIN_FILE}"
-                cd "$SOURCE_PATH" || exit 1
-                echo "📦 Extracting toolchain..."
-                if tar -xzf "${TOOLCHAIN_ABS_PATH}"; then
-                  echo "✅ Toolchain restored from release"
-                else
-                  echo "⚠️ 无法解压 toolchain，将在后续步骤自动构建完整工具链"
-                fi
-                cd - >/dev/null
-                rm -f "${TOOLCHAIN_FILE}"
-              else
-                echo "⚠️ 下载的 toolchain 文件为空或不存在，将在后续步骤自动构建完整工具链"
-                rm -f "${TOOLCHAIN_FILE}"
-              fi
-            else
-              echo "⚠️ toolchain 下载失败，将在后续步骤自动构建完整工具链"
-            fi
-          else
-            echo "⚠️ 未找到对应的 toolchain 文件: ${TOOLCHAIN_FILE}，将自动构建"
-            echo "💡 可用的toolchain文件:"
-            gh release view toolchain --json assets | jq -r '.assets[].name' | grep "toolchain-" || echo "No toolchain files found"
-          fi
-
-      - name: Download ccache from release
-        if: ${{ github.event.inputs.CCACHE == 'true' }}
-        run: |
-          CCACHE_RELEASE="ccache"
-          CCACHE_FILE="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}.tar.gz"
-          CCACHE_URL="https://github.com/${{ github.repository }}/releases/download/${CCACHE_RELEASE}/${CCACHE_FILE}"
-          
-          echo "🔍 Checking for existing ccache: $CCACHE_FILE"
-          echo "📍 CCache directory: ${{ env.CCACHE_DIR }}"
-          
-          # 尝试下载现有的ccache
-          if wget --spider -q "$CCACHE_URL" 2>/dev/null; then
-            echo "📦 Found existing ccache, downloading..."
-            if wget -q "$CCACHE_URL" -O "${CCACHE_FILE}"; then
-              echo "📋 Downloaded file info:"
-              ls -lh "${CCACHE_FILE}"
-              
-              # 验证文件确实存在且不为空
-              if [ -f "${CCACHE_FILE}" ] && [ -s "${CCACHE_FILE}" ]; then
-                # 使用绝对路径避免路径问题
-                CCACHE_ABS_PATH="$(pwd)/${CCACHE_FILE}"
-                cd "$SOURCE_PATH" || exit 1
-                if tar -xzf "${CCACHE_ABS_PATH}"; then
-                  echo "✅ CCache extracted successfully"
-                else
-                  echo "⚠️ Failed to extract ccache, will start fresh"
-                fi
-                cd - >/dev/null
-                rm -f "${CCACHE_FILE}" || true
-              else
-                echo "⚠️ Downloaded ccache file is empty or doesn't exist, will start fresh"
-                rm -f "${CCACHE_FILE}" || true
-              fi
-            else
-              echo "⚠️ Failed to download ccache, will start fresh"
-            fi
-          else
-            echo "🆕 No existing ccache found, starting fresh"
-          fi
-
-      - name: Generate cache key
-        if: ${{ github.event.inputs.CCACHE == 'true' }}
-        run: |
-          # 生成缓存key，只缓存非toolchain相关的构建产物
-          CONFIG_HASH=$(find config/ -name "*.seed" -type f -exec cat {} \; | md5sum | cut -d' ' -f1)
-          CACHE_KEY="build-packages-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}-${CONFIG_HASH}"
-          echo "BUILD_PACKAGES_CACHE_KEY=${CACHE_KEY}" >> $GITHUB_ENV
-          echo "📋 Build packages cache key: ${CACHE_KEY}"
-
-      - name: Restore build packages cache
-        if: ${{ github.event.inputs.CCACHE == 'true' }}
-        uses: actions/cache/restore@v4
+      - name: Cache
+        uses: stupidloud/cachewrtbuild@main
         with:
-          path: |
-            ${{ env.SOURCE_PATH }}/dl
-            ${{ env.SOURCE_PATH }}/feeds
-          key: ${{ env.BUILD_PACKAGES_CACHE_KEY }}
-          restore-keys: |
-            build-packages-${{ env.REPO_BRANCH }}-${{ env.TOOLCHAIN_TYPE }}-
-            build-packages-${{ env.REPO_BRANCH }}-
+          prefix: ${{ SOURCE_PATH }}
+          #是否一并缓存.ccache目录，如果你启用了ccache。这是唯一的常用参数，其他三个用于除错，一般不需要调整
+          ccache: ${{ github.event.inputs.CCACHE }}
+          #是否缓存工具链目录
+          toolchain: true
+          #是否跳过工具链编译
+          skip: true
+          #清空缓存
+          clean: false
+          mixkey: ${{ matrix.DEVICE }}
 
       - name: Update feeds
         run: ./script/tool.sh update_feeds
       - name: Generate configuration file
         env:
           CONFIG_FILE: ${{ matrix.DEVICE }}.seed
-        run: |
-          ./script/tool.sh build_config
-          echo "CONFIG_CCACHE=y" >> .config
-
+        run: ./script/tool.sh build_config
       - name: Make download
         run: ./script/tool.sh make_download
-      - name: Configure ccache
-        if: ${{ github.event.inputs.CCACHE == 'true' }}
-        run: |
-          echo "🔧 Configuring ccache..."
-          echo "📍 CCache directory: ${{ env.CCACHE_DIR }}"
-          echo "📍 USE_CCACHE: ${{ env.USE_CCACHE }}"
-          
-          # 确保 ccache 目录存在
-          mkdir -p "${{ env.CCACHE_DIR }}"
-          
-          # 配置 ccache 环境变量
-          echo "CCACHE_DIR=${{ env.CCACHE_DIR }}" >> $GITHUB_ENV
-          echo "USE_CCACHE=${{ env.USE_CCACHE }}" >> $GITHUB_ENV
-          
-          # 检查ccache是否可用
-          if [ -x "$(command -v ccache)" ]; then
-            echo "✅ CCache is available"
-            ccache -s
-          else
-            echo "⚠️ CCache not found, will use regular compilation"
-          fi
       - name: Compile firmware
         run: ./script/tool.sh compile_firmware
-      - name: Clean Packages
-        run: rm -rf ${{env.SOURCE_PATH}}/bin/targets/*/*/packages
+      - name: Prepare firmware
+        run: |
+          rm -rf ${{env.SOURCE_PATH}}/bin/targets/*/*/packages
+          mkdir -p ${{env.SOURCE_PATH}}/bin/output/
+          cp -f ${{env.SOURCE_PATH}}/bin/targets/*/*/* ${{env.SOURCE_PATH}}/bin/output/
       - name: Create release
         uses: ncipollo/release-action@v1.14.0
         with:
           name: OpenWrt-${{ env.REPO_BRANCH }}-${{ matrix.DEVICE }}
           allowUpdates: true
-          tag: ${{ env.REPO_BRANCH }}
+          tag: ${{ env.REPO_BRANCH }}-${{ matrix.DEVICE }}
           commit: main
           replacesArtifacts: true
-          artifacts: |
-            ${{env.SOURCE_PATH}}/bin/targets/*/*/openwrt-*
+          artifacts: ${{env.SOURCE_PATH}}/bin/output/*
       - name: Upload OpenWrt firmware
         uses: actions/upload-artifact@master
         with:
           name: OpenWrt firmware ${{ matrix.DEVICE }}
           path: |
             ${{env.SOURCE_PATH}}/bin/targets/
-      - name: Package ccache
-        if: ${{ github.event.inputs.CCACHE == 'true' }}
-        run: |
-          cd "$SOURCE_PATH" || exit 1
-          CCACHE_NAME="ccache-${{ env.REPO_BRANCH }}-${{ env.DEVICE_PLATFORM }}"
-          
-          # 打包ccache目录
-          if [ -d ".ccache" ]; then
-            # 检查ccache大小，使用更合理的阈值（10MB = 10240KB）
-            CCACHE_SIZE_KB=$(du -s .ccache | cut -f1)
-            CCACHE_THRESHOLD=10240
-            
-            if [ "$CCACHE_SIZE_KB" -gt "$CCACHE_THRESHOLD" ]; then
-              echo "📦 Packaging updated ccache..."
-              echo "💾 CCache size: $(du -sh .ccache | cut -f1)"
-              tar -czf "${CCACHE_NAME}.tar.gz" .ccache/
-              echo "✅ CCache package created: $(ls -lh ${CCACHE_NAME}.tar.gz)"
-              
-              # 检查ccache统计信息
-              if [ -x "$(command -v ccache)" ]; then
-                echo "📊 CCache Statistics:"
-                ccache -s
-              fi
-              
-              echo "CCACHE_FILE=${CCACHE_NAME}.tar.gz" >> $GITHUB_ENV
-              echo "SHOULD_UPDATE_CCACHE=true" >> $GITHUB_ENV
-              echo "✅ CCache will be updated (${CCACHE_SIZE_KB}KB > ${CCACHE_THRESHOLD}KB)"
-            else
-              echo "⚠️ CCache too small for upload (${CCACHE_SIZE_KB}KB <= ${CCACHE_THRESHOLD}KB)"
-              echo "SHOULD_UPDATE_CCACHE=false" >> $GITHUB_ENV
-            fi
-          else
-            echo "❌ No ccache directory found"
-            echo "SHOULD_UPDATE_CCACHE=false" >> $GITHUB_ENV
-          fi
-
-      - name: Create ccache release
-        if: ${{ github.event.inputs.CCACHE == 'true' && env.SHOULD_UPDATE_CCACHE == 'true' }}
-        uses: ncipollo/release-action@v1.14.0
-        with:
-          name: "OpenWrt CCache"
-          allowUpdates: true
-          tag: "ccache"
-          commit: main
-          replacesArtifacts: true
-          body: |
-            ## 🚀 OpenWrt CCache 编译缓存集合 (Auto Updated)
-            
-            这个release包含所有分支和架构的OpenWrt ccache文件，由构建流程自动更新。
-            
-            ### 📋 可用的CCache文件
-            
-            #### Main分支
-            - `ccache-main-arm64.tar.gz` - 适用于 ARM64 设备 (nanopi-r5s, cudy-tr3000)
-            - `ccache-main-amd64.tar.gz` - 适用于 x86_64 设备
-            
-            #### OpenWrt-24.10分支
-            - `ccache-openwrt-24.10-arm64.tar.gz`
-            - `ccache-openwrt-24.10-amd64.tar.gz`
-            
-            ### 🔧 使用方法
-            ```bash
-            # 下载对应架构的ccache文件
-            wget https://github.com/${{ github.repository }}/releases/download/ccache/ccache-{分支}-{架构}.tar.gz
-            
-            # 解压到OpenWrt源码目录
-            tar -xzf ccache-{分支}-{架构}.tar.gz -C /path/to/openwrt/source/
-            ```
-            
-            ### 📝 最后更新
-            - **时间**: ${{ github.run_id }}
-            - **分支**: ${{ env.REPO_BRANCH }}
-            - **架构**: ${{ env.DEVICE_PLATFORM }}
-            - **设备**: ${{ matrix.DEVICE }}
-            - **构建类型**: 自动更新
-            
-            > 此ccache由构建流程自动更新，包含最新的编译缓存数据
-          artifacts: |
-            ${{ env.SOURCE_PATH }}/${{ env.CCACHE_FILE }}
-
-      - name: Save build packages cache
-        if: ${{ github.event.inputs.CCACHE == 'true' }}
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ env.SOURCE_PATH }}/dl
-            ${{ env.SOURCE_PATH }}/feeds
-          key: ${{ env.BUILD_PACKAGES_CACHE_KEY }}
