@@ -5,4 +5,3 @@ CONFIG_TARGET_mediatek_filogic_DEVICE_cudy_tr3000-v1-ubootmod=y
 CONFIG_PACKAGE_kmod-mii=y
 CONFIG_PACKAGE_kmod-mtd-rw=y
 
-CONFIG_LINUX_6_12=y
