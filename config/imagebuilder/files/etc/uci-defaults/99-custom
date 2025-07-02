@@ -1,0 +1,33 @@
+#!/bin/sh
+# 99-custom - ImageBuilder自定义UCI配置
+# 此脚本在固件首次启动时执行，用于应用自定义配置
+
+# 设置主机名
+uci set system.@system[0].hostname='OpenWrt-Custom'
+
+# 设置时区
+uci set system.@system[0].timezone='CST-8'
+uci set system.@system[0].zonename='Asia/Shanghai'
+
+# 设置默认主题（如果安装了argon主题）
+uci set luci.main.mediaurlbase='/luci-static/argon' 2>/dev/null
+
+# 启用SSH密码认证
+uci set dropbear.@dropbear[0].PasswordAuth='on'
+uci set dropbear.@dropbear[0].RootPasswordAuth='on'
+
+# 设置防火墙默认策略
+uci set firewall.@defaults[0].syn_flood='1'
+
+# 启用UPnP（如果安装了相关包）
+uci set upnpd.config.enabled='1' 2>/dev/null
+uci set upnpd.config.enable_natpmp='1' 2>/dev/null
+uci set upnpd.config.enable_upnp='1' 2>/dev/null
+
+# 提交所有更改
+uci commit
+
+# 设置执行权限后删除自己（防止重复执行）
+rm -f /etc/uci-defaults/99-custom
+
+exit 0 

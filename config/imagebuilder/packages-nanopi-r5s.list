@@ -1,0 +1,33 @@
+# NanoPi R5S 专用包列表
+# 基于ARM64架构的特殊包
+
+# GPU和显示支持
+kmod-drm
+kmod-drm-kms-helper
+kmod-drm-panfrost
+kmod-drm-rockchip
+kmod-fb
+kmod-fb-cfb-copyarea
+kmod-fb-cfb-fillrect
+kmod-fb-cfb-imgblt
+
+# I2C支持
+kmod-i2c-core
+
+# 流量整形
+kmod-ifb
+
+# NanoPi R5S专用应用
+luci-app-nikki
+luci-app-snmpd
+
+# 硬件监控
+lm-sensors
+kmod-hwmon-core
+
+# 性能优化
+irqbalance
+
+# 存储相关
+kmod-ata-core
+kmod-scsi-core 

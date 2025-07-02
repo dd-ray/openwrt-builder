@@ -1,0 +1,99 @@
+# OpenWrt ImageBuilder 通用包列表
+# 每行一个包名，以#开头的行为注释，空行将被忽略
+
+# 基础系统工具
+bash
+wget
+curl
+nano
+vim-tiny
+htop
+btop
+openssh-sftp-server
+unzip
+tar
+gzip
+
+# 网络工具
+bind-host
+iputils-arping
+tcpdump
+nmap
+iperf3
+ethtool
+
+# 系统监控和管理
+btop
+lsblk
+fdisk
+blkid
+
+# 中文支持
+luci-i18n-base-zh-cn
+zoneinfo-asia
+zoneinfo-core
+
+# LuCI Web界面增强
+luci-app-package-manager
+luci-app-ttyd
+luci-app-watchcat
+luci-app-nlbwmon
+luci-app-upnp
+luci-app-commands
+
+# 防火墙和QoS
+luci-app-firewall
+luci-app-nft-qos
+
+# 主题
+luci-theme-argon
+
+# VPN支持
+luci-proto-wireguard
+wireguard-tools
+
+# 网络协议支持
+luci-proto-ncm
+comgt
+comgt-ncm
+usb-modeswitch
+
+# 内核模块 - 文件系统
+kmod-fs-f2fs
+kmod-fs-btrfs
+kmod-fs-nfs
+kmod-fs-nfs-common
+kmod-fs-nfs-v3
+kmod-fs-nfs-v4
+kmod-fuse
+fuse3-utils
+
+# 内核模块 - 网络
+kmod-tcp-bbr
+kmod-tcp-brutal
+kmod-vxlan
+kmod-wireguard
+
+# 内核模块 - USB网络设备
+kmod-usb-net
+kmod-usb-net-cdc-ether
+kmod-usb-net-cdc-ncm
+kmod-usb-net-huawei-cdc-ncm
+kmod-usb-net-rndis
+kmod-usb-serial
+kmod-usb-serial-option
+kmod-usb-serial-wwan
+kmod-usb-wdm
+
+# 加密和压缩
+kmod-crypto-crc32
+kmod-crypto-crc32c
+kmod-lib-crc32c
+kmod-lib-zlib-deflate
+kmod-lib-zlib-inflate
+kmod-lib-zstd
+
+# DNS和网络优化
+dnsmasq-full
+luci-app-mosdns
+mosdns 

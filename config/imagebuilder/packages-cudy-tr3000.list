@@ -1,0 +1,26 @@
+# Cudy TR3000 专用包列表
+# 基于MediaTek MT7986A平台
+
+# WiFi 6支持
+kmod-mt7915e
+hostapd-common
+hostapd-utils
+wpad-openssl
+
+# MediaTek特定驱动
+kmod-mt7530
+
+# 2.5G网络支持
+kmod-r8125
+
+# LED控制
+kmod-leds-gpio
+
+# 硬件随机数生成器
+kmod-random-core
+
+# 加密加速
+kmod-crypto-hw-hifn-795x
+
+# 网络加速
+kmod-fast-classifier 

@@ -1,0 +1,53 @@
+# x86_64 专用包列表
+# 针对x86_64平台的特殊包
+
+# x86硬件支持
+kmod-e1000
+kmod-e1000e
+kmod-igb
+kmod-ixgbe
+kmod-r8169
+kmod-tg3
+kmod-tulip
+
+# ACPI和电源管理
+kmod-acpi-button
+acpid
+
+# PCI支持
+pciutils
+lspci
+
+# 虚拟化支持
+kmod-kvm-amd
+kmod-kvm-intel
+qemu-ga
+
+# x86专用网络驱动
+kmod-3c59x
+kmod-8139too
+kmod-8139cp
+kmod-forcedeth
+
+# 磁盘和文件系统
+kmod-ata-ahci
+kmod-ata-piix
+kmod-scsi-core
+smartmontools
+hdparm
+
+# 硬件监控
+lm-sensors
+kmod-hwmon-coretemp
+kmod-hwmon-k8temp
+
+# USB3.0支持
+kmod-usb3
+kmod-usb-ehci
+kmod-usb-ohci
+kmod-usb-uhci
+
+# 显卡支持
+kmod-fb-vesa
+kmod-drm
+kmod-drm-i915 

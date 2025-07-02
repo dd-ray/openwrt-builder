@@ -1,0 +1,104 @@
+name: OpenWrt-ImageBuilder-Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      DEVICE:
+        description: '设备类型'
+        required: true
+        default: 'nanopi-r5s'
+        type: choice
+        options:
+          - 'nanopi-r5s'
+          - 'cudy-tr3000'
+          - 'x86_64'
+      REPO_BRANCH:
+        description: 'OpenWrt分支'
+        required: true
+        default: 'main'
+        type: choice
+        options:
+          - 'main'
+          - 'openwrt-24.10'
+      CUSTOM_PACKAGES:
+        description: '自定义包列表 (空格分隔，如: wget curl nano)'
+        required: false
+        type: string
+      REMOVE_PACKAGES:
+        description: '移除的包列表 (空格分隔，用-前缀，如: -dnsmasq -odhcpd)'
+        required: false
+        type: string
+
+env:
+  DEVICE: ${{ github.event.inputs.DEVICE }}
+  REPO_BRANCH: ${{ github.event.inputs.REPO_BRANCH }}
+  TZ: Asia/Shanghai
+  BUILDER_PATH: ${{ github.workspace }}
+
+jobs:
+  build-with-imagebuilder:
+    runs-on: ubuntu-latest
+    name: Build firmware using ImageBuilder for ${{ github.event.inputs.DEVICE }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Build System Setup
+        uses: dd-ray/github-actions@openwrt-build-setup
+        
+      - name: Download ImageBuilder
+        run: ./script/tool.sh download_imagebuilder
+        
+      - name: Extract ImageBuilder
+        run: ./script/tool.sh extract_imagebuilder
+        
+      - name: Prepare package lists
+        env:
+          CUSTOM_PACKAGES: ${{ github.event.inputs.CUSTOM_PACKAGES }}
+          REMOVE_PACKAGES: ${{ github.event.inputs.REMOVE_PACKAGES }}
+        run: ./script/tool.sh prepare_packages
+        
+      - name: Build firmware with ImageBuilder
+        run: ./script/tool.sh build_with_imagebuilder
+        
+      - name: Prepare firmware files
+        run: |
+          mkdir -p ${{ github.workspace }}/firmware-output/
+          find ${{ github.workspace }}/imagebuilder-*/bin/targets/ -name "*.bin" -o -name "*.img" -o -name "*.img.gz" | xargs -I {} cp {} ${{ github.workspace }}/firmware-output/
+          find ${{ github.workspace }}/imagebuilder-*/bin/targets/ -name "*.buildinfo" -o -name "*.manifest" | xargs -I {} cp {} ${{ github.workspace }}/firmware-output/
+          ls -la ${{ github.workspace }}/firmware-output/
+          
+      - name: Create firmware release
+        uses: ncipollo/release-action@v1.14.0
+        with:
+          name: OpenWrt-ImageBuilder-Firmware-${{ env.REPO_BRANCH }}-${{ env.DEVICE }}
+          allowUpdates: true
+          tag: imagebuilder-firmware-${{ env.REPO_BRANCH }}-${{ env.DEVICE }}
+          commit: main
+          replacesArtifacts: true
+          artifacts: ${{ github.workspace }}/firmware-output/*
+          body: |
+            ## 使用ImageBuilder构建的OpenWrt固件
+            
+            **设备**: ${{ env.DEVICE }}  
+            **分支**: ${{ env.REPO_BRANCH }}  
+            **构建时间**: ${{ github.run_id }}
+            **自定义包**: ${{ github.event.inputs.CUSTOM_PACKAGES }}
+            **移除包**: ${{ github.event.inputs.REMOVE_PACKAGES }}
+            
+            ### 特性
+            - 使用ImageBuilder快速构建，大幅缩短构建时间
+            - 基于预编译的工具链和内核
+            - 可自定义安装和移除的软件包
+            
+            ### 安装方法
+            1. 下载对应设备的固件文件(.bin/.img)
+            2. 使用OpenWrt的sysupgrade或者设备厂商的刷机工具进行升级
+            3. 注意：首次刷机请使用factory固件，升级请使用sysupgrade固件
+            
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenWrt-ImageBuilder-Firmware-${{ env.DEVICE }}
+          path: ${{ github.workspace }}/firmware-output/* 
