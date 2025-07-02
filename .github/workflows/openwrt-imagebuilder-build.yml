@@ -47,6 +47,11 @@ jobs:
       - name: Build System Setup
         uses: dd-ray/github-actions@openwrt-build-setup
         
+      - name: Install zstd tool
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+        
       - name: Download ImageBuilder
         run: ./script/tool.sh download_imagebuilder
         

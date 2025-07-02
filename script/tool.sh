@@ -138,19 +138,16 @@ function compile_imagebuilder() {
 function download_imagebuilder() {
   echo "开始下载ImageBuilder..."
   
-  # 根据设备类型确定架构和下载URL
+  # 根据设备类型确定ImageBuilder文件名
   case "$DEVICE" in
     "nanopi-r5s")
-      ARCH="rockchip-armv8"
-      TARGET="rockchip/armv8"
+      IMAGEBUILDER_FILE="openwrt-imagebuilder-rockchip-armv8.Linux-x86_64.tar.zst"
       ;;
     "cudy-tr3000")
-      ARCH="mediatek-filogic"
-      TARGET="mediatek/filogic"
+      IMAGEBUILDER_FILE="openwrt-imagebuilder-mediatek-filogic.Linux-x86_64.tar.zst"
       ;;
     "x86_64")
-      ARCH="x86-64"
-      TARGET="x86/64"
+      IMAGEBUILDER_FILE="openwrt-imagebuilder-x86-64.Linux-x86_64.tar.zst"
       ;;
     *)
       echo "不支持的设备类型: $DEVICE"
@@ -158,43 +155,71 @@ function download_imagebuilder() {
       ;;
   esac
   
-  # 构建下载URL
-  if [ "$REPO_BRANCH" == "main" ]; then
-    BASE_URL="https://downloads.openwrt.org/snapshots/targets"
-  elif [ "$REPO_BRANCH" == "openwrt-24.10" ]; then
-    BASE_URL="https://downloads.openwrt.org/releases/24.10-SNAPSHOT/targets"
-  else
-    echo "不支持的分支: $REPO_BRANCH"
-    exit 1
-  fi
+  # 构建GitHub Release下载URL
+  RELEASE_TAG="imagebuilder-${REPO_BRANCH}-${DEVICE}"
+  GITHUB_REPO="${GITHUB_REPOSITORY:-dd-ray/openwrt-builder}"
+  DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}/${IMAGEBUILDER_FILE}"
   
-  DOWNLOAD_URL="${BASE_URL}/${TARGET}"
-  
+  echo "从GitHub Release下载ImageBuilder..."
+  echo "设备: $DEVICE"
+  echo "分支: $REPO_BRANCH"
+  echo "Release标签: $RELEASE_TAG"
+  echo "文件: $IMAGEBUILDER_FILE"
   echo "下载URL: $DOWNLOAD_URL"
-  
-  # 获取ImageBuilder文件列表
-  echo "获取ImageBuilder文件列表..."
-  IMAGEBUILDER_FILE=$(curl -s "$DOWNLOAD_URL/" | grep -o 'openwrt-imagebuilder-.*\.tar\.xz' | head -1)
-  
-  if [ -z "$IMAGEBUILDER_FILE" ]; then
-    echo "未找到ImageBuilder文件，尝试从GitHub Release下载..."
-    # 从GitHub Release下载
-    RELEASE_TAG="imagebuilder-${REPO_BRANCH}-${DEVICE}"
-    RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}"
-    IMAGEBUILDER_FILE=$(curl -s "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" | grep "browser_download_url.*imagebuilder.*tar.xz" | cut -d '"' -f 4 | xargs basename)
-    DOWNLOAD_URL="$RELEASE_URL"
-  fi
-  
-  echo "ImageBuilder文件: $IMAGEBUILDER_FILE"
   
   # 下载ImageBuilder
   cd "$BUILDER_PATH" || exit 1
-  echo "开始下载: ${DOWNLOAD_URL}/${IMAGEBUILDER_FILE}"
-  wget -O imagebuilder.tar.xz "${DOWNLOAD_URL}/${IMAGEBUILDER_FILE}"
+  echo "开始下载..."
+  
+  # 检查文件格式并使用相应的文件名
+  if [[ "$IMAGEBUILDER_FILE" == *.tar.zst ]]; then
+    OUTPUT_FILE="imagebuilder.tar.zst"
+  else
+    OUTPUT_FILE="imagebuilder.tar.xz"
+  fi
+  
+  wget -O "$OUTPUT_FILE" "$DOWNLOAD_URL"
   
   if [ $? -ne 0 ]; then
-    echo "ImageBuilder下载失败！"
-    exit 1
+    echo "从GitHub Release下载失败，尝试从官方源下载..."
+    
+    # 备用：从官方源下载
+    case "$DEVICE" in
+      "nanopi-r5s")
+        TARGET="rockchip/armv8"
+        ;;
+      "cudy-tr3000")
+        TARGET="mediatek/filogic"
+        ;;
+      "x86_64")
+        TARGET="x86/64"
+        ;;
+    esac
+    
+    if [ "$REPO_BRANCH" == "main" ]; then
+      BASE_URL="https://downloads.openwrt.org/snapshots/targets"
+    elif [ "$REPO_BRANCH" == "openwrt-24.10" ]; then
+      BASE_URL="https://downloads.openwrt.org/releases/24.10-SNAPSHOT/targets"
+    else
+      echo "不支持的分支: $REPO_BRANCH"
+      exit 1
+    fi
+    
+    OFFICIAL_URL="${BASE_URL}/${TARGET}"
+    OFFICIAL_FILE=$(curl -s "$OFFICIAL_URL/" | grep -o 'openwrt-imagebuilder-.*\.tar\.xz' | head -1)
+    
+    if [ -n "$OFFICIAL_FILE" ]; then
+      echo "从官方源下载: ${OFFICIAL_URL}/${OFFICIAL_FILE}"
+      wget -O imagebuilder.tar.xz "${OFFICIAL_URL}/${OFFICIAL_FILE}"
+      
+      if [ $? -ne 0 ]; then
+        echo "官方源下载也失败！"
+        exit 1
+      fi
+    else
+      echo "未找到官方ImageBuilder文件！"
+      exit 1
+    fi
   fi
   
   echo "ImageBuilder下载完成"
@@ -204,22 +229,74 @@ function extract_imagebuilder() {
   echo "解压ImageBuilder..."
   cd "$BUILDER_PATH" || exit 1
   
-  if [ ! -f "imagebuilder.tar.xz" ]; then
-    echo "ImageBuilder文件不存在！"
+  # 检查存在的ImageBuilder文件格式
+  IMAGEBUILDER_ARCHIVE=""
+  if [ -f "imagebuilder.tar.zst" ]; then
+    IMAGEBUILDER_ARCHIVE="imagebuilder.tar.zst"
+    echo "发现zstd格式的ImageBuilder文件"
+  elif [ -f "imagebuilder.tar.xz" ]; then
+    IMAGEBUILDER_ARCHIVE="imagebuilder.tar.xz"
+    echo "发现xz格式的ImageBuilder文件"
+  else
+    echo "错误：未找到ImageBuilder文件！"
+    echo "查找的文件: imagebuilder.tar.zst 或 imagebuilder.tar.xz"
+    ls -la imagebuilder.* 2>/dev/null || echo "没有找到任何imagebuilder.*文件"
     exit 1
   fi
   
-  tar -xf imagebuilder.tar.xz
+  echo "开始解压: $IMAGEBUILDER_ARCHIVE"
+  
+  # 根据文件格式选择解压命令
+  if [[ "$IMAGEBUILDER_ARCHIVE" == *.tar.zst ]]; then
+    # 检查是否安装了zstd
+    if ! command -v zstd >/dev/null 2>&1; then
+      echo "安装zstd解压工具..."
+      if command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get update && sudo apt-get install -y zstd
+      elif command -v yum >/dev/null 2>&1; then
+        sudo yum install -y zstd
+      elif command -v brew >/dev/null 2>&1; then
+        brew install zstd
+      else
+        echo "错误：无法安装zstd工具，请手动安装"
+        exit 1
+      fi
+    fi
+    
+    # 使用zstd解压
+    zstd -d "$IMAGEBUILDER_ARCHIVE" -o imagebuilder.tar
+    if [ $? -ne 0 ]; then
+      echo "zstd解压失败！"
+      exit 1
+    fi
+    tar -xf imagebuilder.tar
+    rm -f imagebuilder.tar
+  else
+    # 使用标准tar命令解压xz格式
+    tar -xf "$IMAGEBUILDER_ARCHIVE"
+  fi
+  
+  if [ $? -ne 0 ]; then
+    echo "ImageBuilder解压失败！"
+    exit 1
+  fi
   
   # 重命名解压目录
   IMAGEBUILDER_DIR=$(find . -maxdepth 1 -name "openwrt-imagebuilder-*" -type d | head -1)
   if [ -z "$IMAGEBUILDER_DIR" ]; then
     echo "解压后未找到ImageBuilder目录！"
+    echo "当前目录内容："
+    ls -la
     exit 1
   fi
   
+  echo "找到ImageBuilder目录: $IMAGEBUILDER_DIR"
   mv "$IMAGEBUILDER_DIR" "imagebuilder-$DEVICE"
   echo "ImageBuilder解压完成: imagebuilder-$DEVICE"
+  
+  # 清理下载的压缩文件
+  rm -f "$IMAGEBUILDER_ARCHIVE"
+  echo "已清理压缩文件: $IMAGEBUILDER_ARCHIVE"
 }
 
 function prepare_packages() {

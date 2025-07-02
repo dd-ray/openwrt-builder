@@ -47,6 +47,8 @@
 **特点**:
 - ✅ 一次构建，多次使用
 - ✅ 包含完整工具链
+- ✅ 自动发布到GitHub Release
+- ✅ 支持zstd压缩，体积更小
 - ⚠️ 需要定期更新
 - ❌ 构建时间较长(1-2小时)
 
@@ -57,6 +59,8 @@
 4. 选择仓库、分支参数
 5. 等待构建完成，ImageBuilder将发布到Release
 
+**Release说明**: 详见 [`config/imagebuilder/RELEASE_USAGE.md`](config/imagebuilder/RELEASE_USAGE.md)
+
 ### 3. 🌟 快速固件构建 (推荐日常使用)
 
 **适用场景**: 快速生成包含特定软件包的固件，无需编译
@@ -65,8 +69,9 @@
 - ✅ 构建速度极快(5-15分钟)
 - ✅ 可自定义软件包
 - ✅ 基于预编译组件
+- ✅ 使用GitHub Release中的ImageBuilder
+- ✅ 支持zstd压缩格式，文件更小
 - ❌ 无法修改内核
-- ❌ 依赖ImageBuilder
 
 **使用方法**:
 
