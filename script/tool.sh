@@ -90,6 +90,51 @@ function compile_firmware() {
   du -h --max-depth=1 ./bin
 }
 
+function build_imagebuilder_config() {
+  cd "$SOURCE_PATH" || exit 1
+  cp -f "${BUILDER_PATH}/config/${CONFIG_FILE}" .config
+  cat "${BUILDER_PATH}/config/common.seed" >> .config
+  echo -e 'CONFIG_DEVEL=y' >> .config
+  echo -e 'CONFIG_CCACHE=y' >> .config
+  # 启用ImageBuilder构建
+  echo -e 'CONFIG_IB=y' >> .config
+
+  if [ "$REPO_BRANCH" == "openwrt-24.10" ]; then
+    echo "OpenWrt 24.10"
+    echo 'CONFIG_LINUX_6_6=y' >> .config
+  fi
+  if [ "$REPO_BRANCH" == "main" ]; then
+    echo "OpenWrt SNAPSHOT"
+    echo 'CONFIG_LINUX_6_12=y' >> .config
+  fi
+
+  if [ -f "${BUILDER_PATH}/script/diy.sh" ]; then
+    bash -c "${BUILDER_PATH}/script/diy.sh ${SOURCE_PATH} ${BUILDER_PATH}"
+  fi
+  du -h --max-depth=2 ./
+  echo "当前ImageBuilder配置=====start"
+  cat .config
+  echo "当前ImageBuilder配置=====end"
+}
+
+function compile_imagebuilder() {
+  cd "$SOURCE_PATH" || exit 1
+  make -j$(nproc) || make -j1 V=s
+  if [ $? -ne 0 ]; then
+    echo "ImageBuilder编译失败！！！"
+    exit 1
+  fi
+  echo "ImageBuilder编译完成"
+  echo "======================="
+  echo "Space usage:"
+  echo "======================="
+  df -h
+  echo "======================="
+  du -h --max-depth=1 ./ --exclude=build_dir --exclude=bin
+  du -h --max-depth=1 ./build_dir
+  du -h --max-depth=1 ./bin
+}
+
 function parse_env() {
   case "$1" in
   install_dep)
@@ -104,14 +149,20 @@ function parse_env() {
   build_config)
     build_config $2
     ;;
+  build_imagebuilder_config)
+    build_imagebuilder_config $2
+    ;;
   make_download)
     make_download $2
     ;;
   compile_firmware)
     compile_firmware $2
     ;;
+  compile_imagebuilder)
+    compile_imagebuilder $2
+    ;;
   *)
-    echo "Usage: tool [install_dep|clone|update_feeds|build_config|make_download|compile_firmware]" >&2
+    echo "Usage: tool [install_dep|clone|update_feeds|build_config|build_imagebuilder_config|make_download|compile_firmware|compile_imagebuilder]" >&2
     exit 1
     ;;
   esac

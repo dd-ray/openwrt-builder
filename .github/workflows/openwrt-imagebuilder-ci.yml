@@ -1,0 +1,114 @@
+name: OpenWrt-ImageBuilder-CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      REPO_URL:
+        description: 'OpenWrt仓库'
+        required: true
+        default: 'openwrt/openwrt'
+        type: choice
+        options:
+          - 'openwrt/openwrt'
+      REPO_BRANCH:
+        description: 'OpenWrt分支'
+        required: true
+        default: 'main'
+        type: choice
+        options:
+          - 'main'
+          - 'openwrt-24.10'
+      CCACHE:
+        description: 'Enable ccache (Use Cache to speed up next build)'
+        type: boolean
+        default: true
+
+env:
+  REPO_URL: "https://github.com/${{ github.event.inputs.REPO_URL }}.git"
+  REPO_BRANCH: ${{ github.event.inputs.REPO_BRANCH }}
+  SOURCE_PATH: "${{ github.workspace }}/openwrt-source"
+  TZ: Asia/Shanghai
+  BUILDER_PATH: ${{ github.workspace }}
+
+jobs:
+  build-imagebuilder:
+    runs-on: ubuntu-latest
+    name: Build ImageBuilder ${{matrix.DEVICE}}
+    strategy:
+      fail-fast: false
+      matrix:
+        DEVICE: ["nanopi-r5s", "cudy-tr3000", "x86_64"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Space cleanup
+        uses: dd-ray/github-actions@free-disk
+        with:
+          build-mount-path: "${{ env.SOURCE_PATH }}"
+          
+      - name: Build System Setup
+        uses: dd-ray/github-actions@openwrt-build-setup
+        
+      - name: Install LLVM
+        uses: dd-ray/github-actions@install-llvm
+        
+      - name: Clone OpenWrt
+        run: |
+          ./script/tool.sh clone
+          
+      - name: Cache
+        uses: stupidloud/cachewrtbuild@main
+        with:
+          prefix: ${{ env.SOURCE_PATH }}
+          ccache: ${{ github.event.inputs.CCACHE }}
+          toolchain: true
+          skip: true
+          clean: false
+          mixkey: imagebuilder-${{ matrix.DEVICE }}
+
+      - name: Update feeds
+        run: ./script/tool.sh update_feeds
+        
+      - name: Generate ImageBuilder configuration file
+        env:
+          CONFIG_FILE: ${{ matrix.DEVICE }}.seed
+        run: ./script/tool.sh build_imagebuilder_config
+        
+      - name: Make download
+        run: ./script/tool.sh make_download
+        
+      - name: Compile ImageBuilder
+        run: ./script/tool.sh compile_imagebuilder
+        
+      - name: Prepare ImageBuilder files
+        run: |
+          mkdir -p ${{env.SOURCE_PATH}}/bin/imagebuilder-output/
+          find ${{env.SOURCE_PATH}}/bin/targets/ -name "*imagebuilder*" -type f -exec cp {} ${{env.SOURCE_PATH}}/bin/imagebuilder-output/ \;
+          ls -la ${{env.SOURCE_PATH}}/bin/imagebuilder-output/
+          
+      - name: Create ImageBuilder release
+        uses: ncipollo/release-action@v1.14.0
+        with:
+          name: OpenWrt-ImageBuilder-${{ env.REPO_BRANCH }}-${{ matrix.DEVICE }}
+          allowUpdates: true
+          tag: imagebuilder-${{ env.REPO_BRANCH }}-${{ matrix.DEVICE }}
+          commit: main
+          replacesArtifacts: true
+          artifacts: ${{env.SOURCE_PATH}}/bin/imagebuilder-output/*
+          body: |
+            ## OpenWrt ImageBuilder 构建
+            
+            **设备**: ${{ matrix.DEVICE }}  
+            **分支**: ${{ env.REPO_BRANCH }}  
+            **构建时间**: ${{ github.run_id }}
+            
+            ### 使用方法
+            1. 下载对应设备的ImageBuilder文件
+            2. 解压到本地目录
+            3. 使用`make image`命令构建自定义固件
+            
+            ### 支持的设备
+            - nanopi-r5s: ARM64架构，通用aarch64工具链
+            - cudy-tr3000: ARM64架构，Cortex-A53优化工具链  
+            - x86_64: x86_64架构
