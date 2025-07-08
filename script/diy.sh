@@ -52,7 +52,7 @@ sed -i 's/config internal themes/config internal themes\n    option Argon  \"\/l
 sed -i 's/option mediaurlbase \/luci-static\/bootstrap/option mediaurlbase \"\/luci-static\/argon\"/g' feeds/luci/modules/luci-base/root/etc/config/luci
 
 ## 复制文件
-cp -f "${BUILDER_PATH}/files" ./
+cp -r "${BUILDER_PATH}/files" ./
 
 # wechatpush
 git clone --depth 1 https://github.com/tty228/luci-app-wechatpush package/new/luci-app-wechatpush
@@ -65,8 +65,9 @@ git clone https://github.com/sbwml/package_kernel_tcp-brutal package/kernel/tcp-
 # Theme
 git clone --depth 1 https://github.com/jerrykuku/luci-theme-argon package/new/luci-theme-argon
 git clone --depth 1 https://github.com/jerrykuku/luci-app-argon-config package/new/luci-app-argon-config
-sed -i '/<a href="https:\/\/github.com\/jerrykuku\/luci-theme-argon" target="_blank">ArgonTheme <%# vPKG_VERSION %><\/a> \//d' package/new/luci-theme-argon/luasrc/view/themes/argon/footer_login.htm
-sed -i '/<a href="https:\/\/github.com\/jerrykuku\/luci-theme-argon" target="_blank">ArgonTheme <%# vPKG_VERSION %><\/a> \//d' package/new/luci-theme-argon/luasrc/view/themes/argon/footer.htm
+sed -i 's#<a href="https://github.com/jerrykuku/luci-theme-argon" target="_blank">ArgonTheme <%\# vPKG_VERSION %></a> |##g' package/new/luci-theme-argon/luasrc/view/themes/argon/footer_login.htm
+sed -i 's#<a href="https://github.com/jerrykuku/luci-theme-argon" target="_blank">ArgonTheme <%\# vPKG_VERSION %></a>#<span class="footer-separator">|</span>#g' package/new/luci-theme-argon/luasrc/view/themes/argon/footer.htm
+sed -i 's#<span class="footer-separator">|</span>##g' package/new/luci-theme-argon/luasrc/view/themes/argon/footer.htm
 
 git clone --depth 1 https://github.com/sundaqiang/openwrt-packages.git package/new/openwrt-packages
 
