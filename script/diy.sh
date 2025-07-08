@@ -51,6 +51,9 @@ echo '修改默认主题为argon'
 sed -i 's/config internal themes/config internal themes\n    option Argon  \"\/luci-static\/argon\"/g' feeds/luci/modules/luci-base/root/etc/config/luci
 sed -i 's/option mediaurlbase \/luci-static\/bootstrap/option mediaurlbase \"\/luci-static\/argon\"/g' feeds/luci/modules/luci-base/root/etc/config/luci
 
+## 复制文件
+cp -f "${BUILDER_PATH}/files" ./
+
 # wechatpush
 git clone --depth 1 https://github.com/tty228/luci-app-wechatpush package/new/luci-app-wechatpush
 git clone --depth 1 https://github.com/nikkinikki-org/OpenWrt-nikki package/new/openWrt-nikki
@@ -85,4 +88,6 @@ use_turboacc
 # 修复 turboacc 的 luci-nginx 依赖
 sed -i 's/+luci +luci-compat/+luci-nginx +luci-compat/g' package/turboacc/luci-app-turboacc/Makefile
 update_luci_app_menu
+
+
 popd
