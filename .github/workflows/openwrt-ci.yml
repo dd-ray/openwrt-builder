@@ -80,15 +80,30 @@ jobs:
           rm -rf ${{env.SOURCE_PATH}}/bin/targets/*/*/packages
           mkdir -p ${{env.SOURCE_PATH}}/bin/output/
           cp -f ${{env.SOURCE_PATH}}/bin/targets/*/*/* ${{env.SOURCE_PATH}}/bin/output/
+      - name: Set release Variable
+        run: |
+          echo "BUILD_TIME=$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
+          if [ "${{ env.REPO_BRANCH }}" == "main" ]; then
+            echo "RELEASE_BRANCH=Snapshot" >> $GITHUB_ENV
+          else
+            echo "RELEASE_BRANCH=${{ env.REPO_BRANCH }}" | sed 's/openwrt-//' >> $GITHUB_ENV
+          fi
       - name: Create release
-        uses: ncipollo/release-action@v1.14.0
+        uses: ncipollo/release-action@v1.18.0
         with:
-          name: OpenWrt-${{ env.REPO_BRANCH }}-${{ matrix.DEVICE }}
+          name: OpenWrt-${{ env.RELEASE_BRANCH }}-${{ matrix.DEVICE }}
           allowUpdates: true
           tag: ${{ env.REPO_BRANCH }}-${{ matrix.DEVICE }}
           commit: main
           replacesArtifacts: true
           artifacts: ${{env.SOURCE_PATH}}/bin/output/*
+          body: |
+            ## 🎯 设备信息
+            - **设备型号**: ${{ matrix.DEVICE }}
+            - **OpenWrt 分支**: ${{ env.REPO_BRANCH }}
+            - **构建时间**: ${{ env.BUILD_TIME }}
+            - **构建编号**: #${{ github.run_number }}        
+
       - name: Upload OpenWrt firmware
         uses: actions/upload-artifact@master
         with:
