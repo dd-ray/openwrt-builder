@@ -43,4 +43,3 @@ CONFIG_PACKAGE_kmod-sound-hda-codec-realtek=y
 CONFIG_PACKAGE_kmod-sound-hda-intel=y
 
 CONFIG_PACKAGE_luci-app-nikki=y
-CONFIG_PACKAGE_luci-app-snmpd=y

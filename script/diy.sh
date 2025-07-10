@@ -51,6 +51,9 @@ echo '修改默认主题为argon'
 sed -i 's/config internal themes/config internal themes\n    option Argon  \"\/luci-static\/argon\"/g' feeds/luci/modules/luci-base/root/etc/config/luci
 sed -i 's/option mediaurlbase \/luci-static\/bootstrap/option mediaurlbase \"\/luci-static\/argon\"/g' feeds/luci/modules/luci-base/root/etc/config/luci
 
+## 复制文件
+cp -r "${BUILDER_PATH}/files" ./
+
 # wechatpush
 git clone --depth 1 https://github.com/tty228/luci-app-wechatpush package/new/luci-app-wechatpush
 git clone --depth 1 https://github.com/nikkinikki-org/OpenWrt-nikki package/new/openWrt-nikki
@@ -62,6 +65,9 @@ git clone https://github.com/sbwml/package_kernel_tcp-brutal package/kernel/tcp-
 # Theme
 git clone --depth 1 https://github.com/jerrykuku/luci-theme-argon package/new/luci-theme-argon
 git clone --depth 1 https://github.com/jerrykuku/luci-app-argon-config package/new/luci-app-argon-config
+sed -i 's#<a href="https://github.com/jerrykuku/luci-theme-argon" target="_blank">ArgonTheme <%\# vPKG_VERSION %></a> |##g' package/new/luci-theme-argon/luasrc/view/themes/argon/footer_login.htm
+sed -i 's#<a href="https://github.com/jerrykuku/luci-theme-argon" target="_blank">ArgonTheme <%\# vPKG_VERSION %></a>#<span class="footer-separator">|</span>#g' package/new/luci-theme-argon/luasrc/view/themes/argon/footer.htm
+sed -i 's#<span class="footer-separator">|</span>##g' package/new/luci-theme-argon/luasrc/view/themes/argon/footer.htm
 
 git clone --depth 1 https://github.com/sundaqiang/openwrt-packages.git package/new/openwrt-packages
 
@@ -83,4 +89,5 @@ use_turboacc
 # 修复 turboacc 的 luci-nginx 依赖
 sed -i 's/+luci +luci-compat/+luci-nginx +luci-compat/g' package/turboacc/luci-app-turboacc/Makefile
 update_luci_app_menu
+
 popd
