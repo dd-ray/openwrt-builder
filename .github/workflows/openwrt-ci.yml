@@ -18,7 +18,7 @@ on:
         options:
           - 'main'
           - 'openwrt-25.12'
-          - 'v25.12.2'
+          - 'v25.12.3'
       CCACHE:
         description: 'Enable ccache (Use Cache to speed up next build)'
         type: boolean
