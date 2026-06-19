@@ -45,14 +45,12 @@ function build_config() {
   cat "${BUILDER_PATH}/config/common.seed" >> .config
   echo -e 'CONFIG_DEVEL=y' >> .config
   echo -e 'CONFIG_CCACHE=y' >> .config
-  echo 'CONFIG_LINUX_6_12=y' >> .config
-  if [ "$REPO_BRANCH" == "openwrt-24.10" ]; then
-    echo "OpenWrt 24.10"
-    echo 'CONFIG_LINUX_6_6=y' >> .config
-  fi
-  if [ "$REPO_BRANCH" == "main" ]; then
+  if [[ "$REPO_BRANCH" == "main" ]]; then
     echo "OpenWrt SNAPSHOT"
     echo 'CONFIG_LINUX_6_18=y' >> .config
+  elif [[ "$REPO_BRANCH" == "openwrt-25.12" || "$REPO_BRANCH" == v25.12* ]]; then
+    echo "OpenWrt 25.12"
+    echo 'CONFIG_LINUX_6_12=y' >> .config
   fi
 
   if [ -f "${BUILDER_PATH}/script/diy.sh" ]; then
