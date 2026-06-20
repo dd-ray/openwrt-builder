@@ -205,12 +205,14 @@ sed -i 's/option mediaurlbase \/luci-static\/bootstrap/option mediaurlbase \"\/l
 
 ## 复制文件
 cp -r "${BUILDER_PATH}/files" ./
-install_openclash_core || exit 1
 
 # wechatpush
 git clone --depth 1 https://github.com/tty228/luci-app-wechatpush package/new/luci-app-wechatpush
 git clone --depth 1 https://github.com/nikkinikki-org/OpenWrt-nikki package/new/openWrt-nikki
 git clone --depth 1 https://github.com/vernesong/OpenClash package/new/openWrt-OpenClash
+
+# 安装 OpenClash 内核（在克隆 OpenClash 之后）
+install_openclash_core || exit 1
 
 # tcp-brutal
 git clone https://github.com/sbwml/package_kernel_tcp-brutal package/kernel/tcp-brutal
