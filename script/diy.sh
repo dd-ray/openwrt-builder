@@ -180,6 +180,47 @@ function install_openclash_core() {
         return 1
     fi
 
+    # 校验文件大小（mihomo 内核通常 > 10MB）
+    local file_size
+    file_size=$(stat -c%s "$extracted_file" 2>/dev/null || stat -f%z "$extracted_file" 2>/dev/null || echo 0)
+    if [ "$file_size" -lt 1048576 ]; then
+        rm -rf "$tmp_dir"
+        echo "错误: mihomo 内核文件过小 (${file_size} bytes)，可能下载不完整"
+        return 1
+    fi
+    echo "mihomo 内核文件大小: $((file_size / 1024 / 1024))MB"
+
+    # 校验文件格式（ELF 格式）
+    if command -v file >/dev/null 2>&1; then
+        local file_type
+        file_type=$(file -b "$extracted_file" 2>/dev/null)
+        if [[ "$file_type" != *"ELF"* ]]; then
+            rm -rf "$tmp_dir"
+            echo "错误: mihomo 内核不是有效的 ELF 可执行文件: ${file_type}"
+            return 1
+        fi
+        echo "文件格式校验通过: ${file_type}"
+    fi
+
+    # 尝试获取 SHA256 校验和（如果 release 提供）
+    local sha256_asset sha256_url sha256_expected sha256_actual
+    sha256_asset="${asset_name}.sha256"
+    if printf '%s\n' "$release_json" | grep -q "\"name\": \"${sha256_asset}\""; then
+        sha256_url="https://github.com/MetaCubeX/mihomo/releases/download/${tag_name}/${sha256_asset}"
+        sha256_expected=$(curl -fsSL --retry 3 --connect-timeout 10 "$sha256_url" 2>/dev/null | awk '{print $1}')
+        if [ -n "$sha256_expected" ]; then
+            sha256_actual=$(sha256sum "$extracted_file" 2>/dev/null | awk '{print $1}')
+            if [ "$sha256_expected" != "$sha256_actual" ]; then
+                rm -rf "$tmp_dir"
+                echo "错误: SHA256 校验失败"
+                echo "  期望: ${sha256_expected}"
+                echo "  实际: ${sha256_actual}"
+                return 1
+            fi
+            echo "SHA256 校验通过: ${sha256_actual}"
+        fi
+    fi
+
     chmod 0755 "$extracted_file"
     mv "$extracted_file" "$target_file" || {
         rm -rf "$tmp_dir"
