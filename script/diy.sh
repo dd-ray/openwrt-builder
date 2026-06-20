@@ -258,6 +258,9 @@ install_openclash_core || exit 1
 # tcp-brutal
 git clone https://github.com/sbwml/package_kernel_tcp-brutal package/kernel/tcp-brutal
 
+# 温度状态监控
+git clone --depth 1 https://github.com/gSpotx2f/luci-app-temp-status package/new/luci-app-temp-status
+
 # Theme
 git clone --depth 1 https://github.com/jerrykuku/luci-theme-argon package/new/luci-theme-argon
 git clone --depth 1 https://github.com/jerrykuku/luci-app-argon-config package/new/luci-app-argon-config
