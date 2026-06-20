@@ -73,7 +73,7 @@ function detect_device() {
 }
 
 function install_openclash_core() {
-    local device release_json tag_name asset_name download_url amd64_level
+    local device tag_name asset_name download_url amd64_level
     local asset_name_prefix archive_file extracted_file
     local target_dir="$SOURCE_PATH/files/etc/openclash/core"
     local target_file="$target_dir/clash_meta"
@@ -120,23 +120,28 @@ function install_openclash_core() {
         echo "x86_64 默认使用普通 amd64 资产，可通过 MIHOMO_AMD64_LEVEL=v1/v2/v3 覆盖"
     fi
 
-    release_json=$(curl -fsSL --retry 3 --connect-timeout 20 "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest") || {
+    # 使用 HEAD 请求获取最新版本，避免 GitHub API 限流
+    # 如果设置了 zai 环境变量，则使用它来避免限流
+    local latest_url="https://github.com/MetaCubeX/mihomo/releases/latest"
+    local effective_url
+    local curl_opts=(-fsSL --retry 3 --connect-timeout 20)
+    if [ -n "${GITHUB_TOKEN:-}" ]; then
+        curl_opts+=(-H "Authorization: token $GITHUB_TOKEN")
+    fi
+    effective_url=$(curl "${curl_opts[@]}" -o /dev/null -w '%{url_effective}' -L "$latest_url" 2>/dev/null) || {
         echo "错误: 获取 mihomo 最新 release 失败"
         return 1
     }
 
-    tag_name=$(printf '%s\n' "$release_json" | sed -n 's/.*"tag_name": "\(v[^"]*\)".*/\1/p' | head -n1)
+    tag_name=$(echo "$effective_url" | sed -n 's|.*/tag/\(.*\)|\1|p')
     if [ -z "$tag_name" ]; then
         echo "错误: 无法解析 mihomo 最新 release tag"
+        echo "  获取到的 URL: $effective_url"
         return 1
     fi
+    echo "mihomo 最新版本: ${tag_name}"
 
     asset_name="${asset_name_prefix}-${tag_name}.gz"
-    if ! printf '%s\n' "$release_json" | grep -q "\"name\": \"${asset_name}\""; then
-        echo "错误: 最新 release ${tag_name} 中未找到资产 ${asset_name}"
-        return 1
-    fi
-
     download_url="https://github.com/MetaCubeX/mihomo/releases/download/${tag_name}/${asset_name}"
     tmp_dir=$(mktemp -d) || {
         echo "错误: 无法创建临时目录"
@@ -156,33 +161,21 @@ function install_openclash_core() {
         return 1
     }
 
-    if ! curl -fL --retry 3 --connect-timeout 20 --retry-delay 2 -o "$archive_file" "$download_url"; then
+    if ! curl "${curl_opts[@]}" --retry-delay 2 -o "$archive_file" "$download_url"; then
         rm -rf "$tmp_dir"
         echo "错误: 下载 mihomo 资产失败: ${download_url}"
         return 1
     fi
 
-    if ! gzip -t "$archive_file"; then
-        rm -rf "$tmp_dir"
-        echo "错误: mihomo 下载文件不是有效的 gzip 包: ${asset_name}"
-        return 1
-    fi
-
     if ! gzip -dc "$archive_file" > "$extracted_file"; then
         rm -rf "$tmp_dir"
-        echo "错误: 解压 mihomo 资产失败"
-        return 1
-    fi
-
-    if [ ! -s "$extracted_file" ]; then
-        rm -rf "$tmp_dir"
-        echo "错误: 解压后的 mihomo 内核为空文件"
+        echo "错误: 解压 mihomo 资产失败（文件可能损坏）"
         return 1
     fi
 
     # 校验文件大小（mihomo 内核通常 > 10MB）
     local file_size
-    file_size=$(stat -c%s "$extracted_file" 2>/dev/null || stat -f%z "$extracted_file" 2>/dev/null || echo 0)
+    file_size=$(wc -c < "$extracted_file")
     if [ "$file_size" -lt 1048576 ]; then
         rm -rf "$tmp_dir"
         echo "错误: mihomo 内核文件过小 (${file_size} bytes)，可能下载不完整"
@@ -190,35 +183,31 @@ function install_openclash_core() {
     fi
     echo "mihomo 内核文件大小: $((file_size / 1024 / 1024))MB"
 
-    # 校验文件格式（ELF 格式）
-    if command -v file >/dev/null 2>&1; then
-        local file_type
-        file_type=$(file -b "$extracted_file" 2>/dev/null)
-        if [[ "$file_type" != *"ELF"* ]]; then
-            rm -rf "$tmp_dir"
-            echo "错误: mihomo 内核不是有效的 ELF 可执行文件: ${file_type}"
-            return 1
-        fi
-        echo "文件格式校验通过: ${file_type}"
+    # 校验文件格式（ELF magic bytes）
+    if ! head -c4 "$extracted_file" | grep -q $'\x7fELF'; then
+        rm -rf "$tmp_dir"
+        echo "错误: mihomo 内核不是有效的 ELF 可执行文件"
+        return 1
     fi
+    echo "文件格式校验通过: ELF"
 
     # 尝试获取 SHA256 校验和（如果 release 提供）
     local sha256_asset sha256_url sha256_expected sha256_actual
     sha256_asset="${asset_name}.sha256"
-    if printf '%s\n' "$release_json" | grep -q "\"name\": \"${sha256_asset}\""; then
-        sha256_url="https://github.com/MetaCubeX/mihomo/releases/download/${tag_name}/${sha256_asset}"
-        sha256_expected=$(curl -fsSL --retry 3 --connect-timeout 10 "$sha256_url" 2>/dev/null | awk '{print $1}')
-        if [ -n "$sha256_expected" ]; then
-            sha256_actual=$(sha256sum "$extracted_file" 2>/dev/null | awk '{print $1}')
-            if [ "$sha256_expected" != "$sha256_actual" ]; then
-                rm -rf "$tmp_dir"
-                echo "错误: SHA256 校验失败"
-                echo "  期望: ${sha256_expected}"
-                echo "  实际: ${sha256_actual}"
-                return 1
-            fi
-            echo "SHA256 校验通过: ${sha256_actual}"
+    sha256_url="https://github.com/MetaCubeX/mihomo/releases/download/${tag_name}/${sha256_asset}"
+    sha256_expected=$(curl "${curl_opts[@]}" --connect-timeout 10 "$sha256_url" 2>/dev/null | awk '{print $1}')
+    if [ -n "$sha256_expected" ]; then
+        sha256_actual=$(sha256sum "$extracted_file" 2>/dev/null | awk '{print $1}')
+        if [ "$sha256_expected" != "$sha256_actual" ]; then
+            rm -rf "$tmp_dir"
+            echo "错误: SHA256 校验失败"
+            echo "  期望: ${sha256_expected}"
+            echo "  实际: ${sha256_actual}"
+            return 1
         fi
+        echo "SHA256 校验通过: ${sha256_actual}"
+    else
+        echo "提示: 未找到 SHA256 校验文件，跳过校验"
     fi
 
     chmod 0755 "$extracted_file"

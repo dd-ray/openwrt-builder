@@ -71,6 +71,7 @@ jobs:
       - name: Generate configuration file
         env:
           CONFIG_FILE: ${{ matrix.DEVICE }}.seed
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./script/tool.sh build_config
       - name: Make download
         run: ./script/tool.sh make_download
