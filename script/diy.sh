@@ -15,7 +15,7 @@ echo '修改网关地址'
 function use_turboacc() {
     pushd $SOURCE_PATH
     # 支持 turboacc
-    curl -sSL https://raw.githubusercontent.com/chenmozhijin/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh
+    curl -sSL https://raw.githubusercontent.com/dd-ray/turboacc/luci/add_turboacc.sh -o add_turboacc.sh && bash add_turboacc.sh
     popd
 }
 
