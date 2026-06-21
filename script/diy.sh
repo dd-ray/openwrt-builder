@@ -68,14 +68,11 @@ git clone --depth 1 https://github.com/gSpotx2f/luci-app-temp-status package/new
 # Theme
 git clone --depth 1 https://github.com/jerrykuku/luci-theme-argon package/new/luci-theme-argon
 git clone --depth 1 https://github.com/jerrykuku/luci-app-argon-config package/new/luci-app-argon-config
-sed -i 's#<a href="https://github.com/jerrykuku/luci-theme-argon" target="_blank">ArgonTheme <%\# vPKG_VERSION %></a> |##g' package/new/luci-theme-argon/luasrc/view/themes/argon/footer_login.htm
-sed -i 's#<a href="https://github.com/jerrykuku/luci-theme-argon" target="_blank">ArgonTheme <%\# vPKG_VERSION %></a>#<span class="footer-separator">|</span>#g' package/new/luci-theme-argon/luasrc/view/themes/argon/footer.htm
-sed -i 's#<span class="footer-separator">|</span>##g' package/new/luci-theme-argon/luasrc/view/themes/argon/footer.htm
+# 移除 luci-theme-argon 版本信息
+sed -i '/ArgonTheme.*vPKG_VERSION/d' package/new/luci-theme-argon/ucode/template/themes/argon/footer.ut 2>/dev/null || true
+sed -i '/ArgonTheme.*vPKG_VERSION/d' package/new/luci-theme-argon/ucode/template/themes/argon/footer_login.ut 2>/dev/null || true
 
 git clone --depth 1 https://github.com/sundaqiang/openwrt-packages.git package/new/openwrt-packages
-
-sed -i '/<a href="https:\/\/github.com\/jerrykuku\/luci-theme-argon" target="_blank">ArgonTheme <%# vPKG_VERSION %><\/a> \//d' package/new/luci-theme-argon/luasrc/view/themes/argon/footer_login.htm
-sed -i '/<a href="https:\/\/github.com\/jerrykuku\/luci-theme-argon" target="_blank">ArgonTheme <%# vPKG_VERSION %><\/a> \//d' package/new/luci-theme-argon/luasrc/view/themes/argon/footer.htm
 
 # Mosdns
 if [ "$REPO_BRANCH" == "openwrt-24.10" ]; then
