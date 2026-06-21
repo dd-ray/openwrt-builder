@@ -30,6 +30,12 @@ env:
   SOURCE_PATH: "${{ github.workspace }}/openwrt-source"
   TZ: Asia/Shanghai
   BUILDER_PATH: ${{ github.workspace }}
+
+# contents:write 用于 ncipollo/release-action 发布固件；actions:write 用于清理旧缓存
+permissions:
+  contents: write
+  actions: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -52,6 +58,17 @@ jobs:
       - name: Clone OpenWrt
         run: |
           ./script/tool.sh clone
+      # 归一化出两位版本标记，用于隔离不同 OpenWrt 版本的缓存：
+      # main -> main；openwrt-25.12 / v25.12.4 -> 25.12（去掉前缀和第三位补丁号）
+      - name: Resolve OpenWrt version tag
+        run: |
+          ver="${REPO_BRANCH#openwrt-}"
+          ver="${ver#v}"
+          if [ "$ver" != "main" ]; then
+            ver="$(echo "$ver" | cut -d. -f1,2)"
+          fi
+          echo "OPENWRT_VERSION=$ver" >> "$GITHUB_ENV"
+          echo "Resolved OpenWrt version tag: $ver"
       - name: Cache
         uses: stupidloud/cachewrtbuild@main
         with:
@@ -64,7 +81,31 @@ jobs:
           skip: true
           #清空缓存
           clean: false
-          mixkey: ${{ matrix.DEVICE }}
+          # 加入版本标记，让不同 OpenWrt 版本各自独立缓存，互不覆盖
+          mixkey: ${{ matrix.DEVICE }}-${{ env.OPENWRT_VERSION }}
+
+      # cachewrtbuild 在启用 ccache 时会在 key 末尾追加时间戳，导致每次构建都新存一份
+      # ~1.1GB 缓存，3 个设备累积很快撑爆 10GB 仓库缓存上限并触发 LRU 淘汰。
+      # 这里在“恢复之后、保存之前”按 (设备 + 版本) 只保留最新一份，其余（含旧
+      # toolchain hash 的失效缓存）全部删除，腾出空间且避免误淘汰其它版本的缓存。
+      - name: Prune stale caches for this device
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFIX: ${{ matrix.DEVICE }}-${{ env.OPENWRT_VERSION }}-cache-openwrt-
+          REF: ${{ github.ref }}
+        run: |
+          echo "Pruning caches with prefix '${PREFIX}' on ref ${REF}, keeping the most recent one"
+          ids=$(gh cache list --ref "$REF" --limit 100 --json key,id,createdAt \
+            --jq "[.[] | select(.key | startswith(\"${PREFIX}\"))] | sort_by(.createdAt) | reverse | .[1:] | .[].id")
+          if [ -z "$ids" ]; then
+            echo "No stale caches to delete."
+          else
+            for id in $ids; do
+              echo "Deleting stale cache id=$id"
+              gh cache delete "$id" || true
+            done
+          fi
 
       - name: Update feeds
         run: ./script/tool.sh update_feeds
