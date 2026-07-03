@@ -1,0 +1,77 @@
+# Cudy TR3000 v1 optimized overlay.
+#
+# Keep the main router/proxy stack from common.seed:
+# LuCI nginx, firewall4, TurboACC, Nikki, MosDNS and WireGuard.
+# Trim packages that are usually optional on this 512MB RAM / small-flash class
+# router, especially storage/server extras and always-on helper apps.
+
+## Heavy diagnostics and shell tools
+# CONFIG_PACKAGE_btop is not set
+# CONFIG_PACKAGE_bind-host is not set
+# CONFIG_PACKAGE_iperf3 is not set
+# CONFIG_PACKAGE_libiperf3 is not set
+
+## Storage/server extras
+# CONFIG_PACKAGE_block-mount is not set
+# CONFIG_PACKAGE_fuse3-utils is not set
+# CONFIG_PACKAGE_kmod-fs-btrfs is not set
+# CONFIG_PACKAGE_kmod-fs-nfs is not set
+# CONFIG_PACKAGE_kmod-fs-nfs-common is not set
+# CONFIG_PACKAGE_kmod-fs-nfs-v3 is not set
+# CONFIG_PACKAGE_kmod-fs-nfs-v4 is not set
+# CONFIG_PACKAGE_kmod-fuse is not set
+# CONFIG_PACKAGE_libacl is not set
+# CONFIG_PACKAGE_libattr is not set
+# CONFIG_PACKAGE_libfuse3 is not set
+# CONFIG_PACKAGE_openssh-sftp-server is not set
+# CONFIG_PACKAGE_rsync is not set
+# CONFIG_RSYNC_acl is not set
+# CONFIG_RSYNC_xattr is not set
+
+## Overlay network protocols
+# CONFIG_PACKAGE_kmod-vxlan is not set
+# CONFIG_PACKAGE_luci-proto-vxlan is not set
+# CONFIG_PACKAGE_vxlan is not set
+
+## Optional LuCI applications and daemons
+# CONFIG_PACKAGE_luci-app-commands is not set
+# CONFIG_PACKAGE_luci-app-nft-qos is not set
+# CONFIG_PACKAGE_luci-app-nlbwmon is not set
+# CONFIG_PACKAGE_luci-app-openclash is not set
+# CONFIG_PACKAGE_luci-app-timecontrol is not set
+# CONFIG_PACKAGE_luci-app-ttyd is not set
+# CONFIG_PACKAGE_luci-app-udpxy is not set
+# CONFIG_PACKAGE_luci-app-webadmin is not set
+# CONFIG_PACKAGE_luci-app-wechatpush is not set
+# CONFIG_PACKAGE_luci-app-wolplus is not set
+# CONFIG_PACKAGE_nlbwmon is not set
+# CONFIG_PACKAGE_tc-tiny is not set
+# CONFIG_PACKAGE_ttyd is not set
+# CONFIG_PACKAGE_udpxy is not set
+
+## Replace OpenClash with Nikki / Mihomo
+CONFIG_PACKAGE_luci-app-nikki=y
+CONFIG_PACKAGE_luci-i18n-nikki-zh-cn=y
+CONFIG_PACKAGE_nikki=y
+CONFIG_PACKAGE_mihomo-meta=y
+# CONFIG_PACKAGE_mihomo-alpha is not set
+# CONFIG_PACKAGE_libruby is not set
+# CONFIG_PACKAGE_libyaml is not set
+# CONFIG_PACKAGE_luasocket is not set
+# CONFIG_PACKAGE_ruby is not set
+# CONFIG_PACKAGE_ruby-bigdecimal is not set
+# CONFIG_PACKAGE_ruby-date is not set
+# CONFIG_PACKAGE_ruby-digest is not set
+# CONFIG_PACKAGE_ruby-enc is not set
+# CONFIG_PACKAGE_ruby-forwardable is not set
+# CONFIG_PACKAGE_ruby-pstore is not set
+# CONFIG_PACKAGE_ruby-psych is not set
+# CONFIG_PACKAGE_ruby-stringio is not set
+# CONFIG_PACKAGE_ruby-strscan is not set
+# CONFIG_PACKAGE_ruby-yaml is not set
+
+## LuCI nginx extras not needed for the router admin UI
+# CONFIG_NGINX_HTTP_QUIC is not set
+# CONFIG_PACKAGE_nginx-mod-brotli is not set
+# CONFIG_PACKAGE_nginx-mod-headers-more is not set
+# CONFIG_PACKAGE_nginx-mod-stream is not set

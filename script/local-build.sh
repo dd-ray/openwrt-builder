@@ -158,7 +158,13 @@ apply_config() {
     
     # 复制配置文件
     cp -f "${BUILDER_PATH}/config/${CONFIG_FILE}" ".config"
-    print_success "配置文件复制成功"
+    cat "${BUILDER_PATH}/config/common.seed" >> ".config"
+    local override_file="${CONFIG_FILE%.seed}.override.seed"
+    if [ -f "${BUILDER_PATH}/config/${override_file}" ]; then
+        print_info "应用设备覆盖配置: ${override_file}"
+        cat "${BUILDER_PATH}/config/${override_file}" >> ".config"
+    fi
+    print_success "配置文件合并成功"
     
     # 添加开发者选项
     echo -e 'CONFIG_DEVEL=y\nCONFIG_CCACHE=y' >> .config

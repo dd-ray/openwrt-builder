@@ -19,6 +19,10 @@ function use_turboacc() {
     popd
 }
 
+function config_enabled() {
+    grep -Eq "^CONFIG_PACKAGE_${1}=y$|^CONFIG_${1}=y$" "$SOURCE_PATH/.config"
+}
+
 function update_luci_app_menu() {
     # 修改 QoS Nftables 插件菜单配置
     echo '修改 QoS Nftables 插件菜单：从 services 移动到 network，名称改为 QoS'
@@ -54,38 +58,53 @@ sed -i 's/option mediaurlbase \/luci-static\/bootstrap/option mediaurlbase \"\/l
 ## 复制文件
 cp -r "${BUILDER_PATH}/files" ./
 
-# wechatpush
-git clone --depth 1 https://github.com/tty228/luci-app-wechatpush package/new/luci-app-wechatpush
-git clone --depth 1 https://github.com/nikkinikki-org/OpenWrt-nikki package/new/openWrt-nikki
-git clone --depth 1 https://github.com/vernesong/OpenClash package/new/openWrt-OpenClash
+if config_enabled luci-app-wechatpush; then
+    git clone --depth 1 https://github.com/tty228/luci-app-wechatpush package/new/luci-app-wechatpush
+fi
+if config_enabled luci-app-nikki || config_enabled nikki; then
+    git clone --depth 1 https://github.com/nikkinikki-org/OpenWrt-nikki package/new/openWrt-nikki
+fi
+if config_enabled luci-app-openclash; then
+    git clone --depth 1 https://github.com/vernesong/OpenClash package/new/openWrt-OpenClash
+fi
 
-# tcp-brutal
-git clone https://github.com/sbwml/package_kernel_tcp-brutal package/kernel/tcp-brutal
+if config_enabled kmod-tcp-brutal; then
+    git clone https://github.com/sbwml/package_kernel_tcp-brutal package/kernel/tcp-brutal
+fi
 
-# 温度状态监控
-git clone --depth 1 https://github.com/gSpotx2f/luci-app-temp-status package/new/luci-app-temp-status
+if config_enabled luci-app-temp-status; then
+    git clone --depth 1 https://github.com/gSpotx2f/luci-app-temp-status package/new/luci-app-temp-status
+fi
 
-# Theme
-git clone --depth 1 https://github.com/jerrykuku/luci-theme-argon package/new/luci-theme-argon
-git clone --depth 1 https://github.com/jerrykuku/luci-app-argon-config package/new/luci-app-argon-config
+if config_enabled luci-theme-argon; then
+    git clone --depth 1 https://github.com/jerrykuku/luci-theme-argon package/new/luci-theme-argon
+fi
+if config_enabled luci-app-argon-config; then
+    git clone --depth 1 https://github.com/jerrykuku/luci-app-argon-config package/new/luci-app-argon-config
+fi
 # 移除 luci-theme-argon 版本信息
 sed -i '/ArgonTheme.*vPKG_VERSION/d' package/new/luci-theme-argon/ucode/template/themes/argon/footer.ut 2>/dev/null || true
 sed -i '/ArgonTheme.*vPKG_VERSION/d' package/new/luci-theme-argon/ucode/template/themes/argon/footer_login.ut 2>/dev/null || true
 
-git clone --depth 1 https://github.com/sundaqiang/openwrt-packages.git package/new/openwrt-packages
-
-# Mosdns
-if [ "$REPO_BRANCH" == "openwrt-24.10" ]; then
-    rm -rf feeds/packages/lang/golang
-    git clone https://github.com/sbwml/packages_lang_golang -b 24.x feeds/packages/lang/golang
+if config_enabled luci-app-wolplus; then
+    git clone --depth 1 https://github.com/sundaqiang/openwrt-packages.git package/new/openwrt-packages
 fi
-rm -rf "feeds/packages/net/v2ray-geodata"
-git clone https://github.com/sbwml/luci-app-mosdns -b v5 package/new/mosdns
-git clone https://github.com/sbwml/v2ray-geodata package/new/v2ray-geodata
+
+if config_enabled luci-app-mosdns || config_enabled mosdns || config_enabled v2ray-geoip || config_enabled v2ray-geosite; then
+    if [ "$REPO_BRANCH" == "openwrt-24.10" ]; then
+        rm -rf feeds/packages/lang/golang
+        git clone https://github.com/sbwml/packages_lang_golang -b 24.x feeds/packages/lang/golang
+    fi
+    rm -rf "feeds/packages/net/v2ray-geodata"
+    git clone https://github.com/sbwml/luci-app-mosdns -b v5 package/new/mosdns
+    git clone https://github.com/sbwml/v2ray-geodata package/new/v2ray-geodata
+fi
 
 # 修补 rust 包 Makefile 中的 --set=llvm.download-ci-llvm=true
 sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' feeds/packages/lang/rust/Makefile
-use_turboacc
+if config_enabled luci-app-turboacc; then
+    use_turboacc
+fi
 # 修复 turboacc 的 luci-nginx 依赖
 sed -i 's/+luci +luci-compat/+luci-nginx +luci-compat/g' package/turboacc/luci-app-turboacc/Makefile
 update_luci_app_menu

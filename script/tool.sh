@@ -43,6 +43,11 @@ function build_config() {
   cd "$SOURCE_PATH" || exit 1
   cp -f "${BUILDER_PATH}/config/${CONFIG_FILE}" .config
   cat "${BUILDER_PATH}/config/common.seed" >> .config
+  local override_file="${CONFIG_FILE%.seed}.override.seed"
+  if [ -f "${BUILDER_PATH}/config/${override_file}" ]; then
+    echo "Apply device override: ${override_file}"
+    cat "${BUILDER_PATH}/config/${override_file}" >> .config
+  fi
   echo -e 'CONFIG_DEVEL=y' >> .config
   echo -e 'CONFIG_CCACHE=y' >> .config
   if [[ "$REPO_BRANCH" == "main" ]]; then
