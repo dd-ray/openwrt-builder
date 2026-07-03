@@ -5,6 +5,10 @@
 # Trim packages that are usually optional on this 512MB RAM / small-flash class
 # router, especially storage/server extras and always-on helper apps.
 
+## Device defaults
+CONFIG_TARGET_PREINIT_BROADCAST="192.168.10.255"
+CONFIG_TARGET_PREINIT_IP="192.168.10.1"
+
 ## Heavy diagnostics and shell tools
 # CONFIG_PACKAGE_btop is not set
 # CONFIG_PACKAGE_bind-host is not set

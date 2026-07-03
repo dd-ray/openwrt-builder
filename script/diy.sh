@@ -23,6 +23,18 @@ function config_enabled() {
     grep -Eq "^CONFIG_PACKAGE_${1}=y$|^CONFIG_${1}=y$" "$SOURCE_PATH/.config"
 }
 
+function target_enabled() {
+    grep -Eq "^CONFIG_TARGET_${1}=y$" "$SOURCE_PATH/.config"
+}
+
+function default_lan_ip() {
+    if target_enabled mediatek_filogic_DEVICE_cudy_tr3000-v1-ubootmod; then
+        echo "192.168.10.1"
+    else
+        echo "192.168.2.1"
+    fi
+}
+
 function update_luci_app_menu() {
     # 修改 QoS Nftables 插件菜单配置
     echo '修改 QoS Nftables 插件菜单：从 services 移动到 network，名称改为 QoS'
@@ -46,7 +58,9 @@ function update_luci_app_menu() {
 }
 
 pushd $SOURCE_PATH
-sed -i 's/192.168.1.1/192.168.2.1/g' package/base-files/files/bin/config_generate
+LAN_IP="$(default_lan_ip)"
+echo "默认 LAN IP: ${LAN_IP}"
+sed -i "s/192.168.1.1/${LAN_IP}/g" package/base-files/files/bin/config_generate
 
 echo '修改时区'
 sed -i "s/'UTC'/'CST-8'\n        set system.@system[-1].zonename='Asia\/Shanghai'/g" package/base-files/files/bin/config_generate
