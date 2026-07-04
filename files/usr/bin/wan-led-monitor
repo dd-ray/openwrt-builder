@@ -1,0 +1,88 @@
+#!/bin/sh
+
+RED_LED="${RED_LED:-/sys/class/leds/red:power}"
+WHITE_LED="${WHITE_LED:-/sys/class/leds/white:status}"
+CHECK_TARGETS="${CHECK_TARGETS:-223.5.5.5 114.114.114.114 1.1.1.1}"
+CHECK_INTERVAL="${CHECK_INTERVAL:-5}"
+FAIL_THRESHOLD="${FAIL_THRESHOLD:-3}"
+
+has_default_route() {
+	ip route show default 2>/dev/null | grep -q '^default '
+}
+
+set_led() {
+	local led="$1"
+	local value="$2"
+
+	[ -d "$led" ] || return 0
+	[ -w "$led/trigger" ] && echo none > "$led/trigger"
+	[ -w "$led/brightness" ] && echo "$value" > "$led/brightness"
+}
+
+show_online() {
+	set_led "$RED_LED" 0
+	set_led "$WHITE_LED" 1
+}
+
+show_offline() {
+	set_led "$WHITE_LED" 0
+	set_led "$RED_LED" 1
+}
+
+internet_ok() {
+	local target
+
+	for target in $CHECK_TARGETS; do
+		ping -q -c 1 -W 1 "$target" >/dev/null 2>&1 && return 0
+	done
+
+	return 1
+}
+
+check_once() {
+	if ! has_default_route; then
+		show_offline
+		return 1
+	fi
+
+	if internet_ok; then
+		show_online
+		return 0
+	fi
+
+	return 1
+}
+
+case "$1" in
+	check)
+		check_once
+		exit $?
+		;;
+esac
+
+fail_count=0
+last_state=""
+
+while true; do
+	if ! has_default_route; then
+		fail_count="$FAIL_THRESHOLD"
+		if [ "$last_state" != "offline" ]; then
+			show_offline
+			last_state="offline"
+		fi
+	elif internet_ok; then
+		fail_count=0
+		if [ "$last_state" != "online" ]; then
+			show_online
+			last_state="online"
+		fi
+	else
+		fail_count=$((fail_count + 1))
+		if [ "$fail_count" -ge "$FAIL_THRESHOLD" ] && [ "$last_state" != "offline" ]; then
+			show_offline
+			last_state="offline"
+		fi
+	fi
+
+	sleep "$CHECK_INTERVAL"
+done

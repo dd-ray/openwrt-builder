@@ -1,0 +1,10 @@
+#!/bin/sh
+
+case "$ACTION" in
+	ifup|ifdown|ifupdate)
+		/usr/bin/wan-led-monitor check >/dev/null 2>&1
+		;;
+esac
+
+exit 0
+

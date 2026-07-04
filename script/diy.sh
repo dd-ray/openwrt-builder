@@ -20,7 +20,11 @@ function use_turboacc() {
 }
 
 function config_enabled() {
-    grep -Eq "^CONFIG_PACKAGE_${1}=y$|^CONFIG_${1}=y$" "$SOURCE_PATH/.config"
+    awk -v package_key="CONFIG_PACKAGE_${1}" -v config_key="CONFIG_${1}" '
+        $0 == package_key "=y" || $0 == config_key "=y" { enabled = 1 }
+        $0 == "# " package_key " is not set" || $0 == "# " config_key " is not set" { enabled = 0 }
+        END { exit enabled ? 0 : 1 }
+    ' "$SOURCE_PATH/.config"
 }
 
 function target_enabled() {
@@ -119,6 +123,10 @@ sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' 
 if config_enabled luci-app-turboacc; then
     use_turboacc
 fi
+# The --no-sfe mode still leaves optional SFE dependencies in some generated
+# luci-app-turboacc Makefiles. Remove them so package index generation stays
+# clean on current OpenWrt branches where these kmods are not present.
+sed -i 's/ +kmod-fast-classifier//g; s/ +kmod-shortcut-fe-cm//g; s/ +kmod-shortcut-fe-drv//g' package/turboacc/luci-app-turboacc/Makefile 2>/dev/null || true
 # 修复 turboacc 的 luci-nginx 依赖
 sed -i 's/+luci +luci-compat/+luci-nginx +luci-compat/g' package/turboacc/luci-app-turboacc/Makefile
 update_luci_app_menu
