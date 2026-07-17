@@ -112,6 +112,8 @@ openwrt-builder/
 │   └── cudy-tr3000.seed      # Cudy TR3000 配置
 ├── files/                    # 自定义文件
 │   └── etc/                  # 系统配置文件
+├── device-files/             # 仅写入指定设备的自定义文件
+│   └── cudy-tr3000/        # Cudy TR3000 专属覆盖层（含 LED 配置）
 ├── script/                   # 构建脚本
 │   ├── local-build.sh        # 本地构建脚本
 │   ├── tool.sh               # CI/CD 工具脚本
@@ -140,6 +142,8 @@ CONFIG_PACKAGE_your-package=y
 ### 添加自定义文件
 
 将文件放置在 `files/` 目录中，构建时会自动复制到固件中。
+
+仅用于 Cudy TR3000 的文件放在 `device-files/cudy-tr3000/` 中；该覆盖层只在 TR3000 目标配置启用时写入固件。
 
 ### 修改插件配置
 
@@ -224,4 +228,3 @@ export HTTPS_PROXY=http://proxy.example.com:8080
 - [P3TERX](https://github.com/P3TERX) - 构建脚本参考
 - [jerrykuku](https://github.com/jerrykuku) - Argon 主题
 - [sbwml](https://github.com/sbwml) - MosDNS 和相关插件
-

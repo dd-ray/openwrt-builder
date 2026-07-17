@@ -31,6 +31,14 @@ function target_enabled() {
     grep -Eq "^CONFIG_TARGET_${1}=y$" "$SOURCE_PATH/.config"
 }
 
+function copy_files_overlay() {
+    local overlay_path="$1"
+
+    [ -d "$overlay_path" ] || return 0
+    mkdir -p "$SOURCE_PATH/files"
+    cp -a "$overlay_path/." "$SOURCE_PATH/files/"
+}
+
 function default_lan_ip() {
     if target_enabled mediatek_filogic_DEVICE_cudy_tr3000-v1-ubootmod; then
         echo "192.168.10.1"
@@ -73,8 +81,12 @@ echo '修改默认主题为argon'
 sed -i 's/config internal themes/config internal themes\n    option Argon  \"\/luci-static\/argon\"/g' feeds/luci/modules/luci-base/root/etc/config/luci
 sed -i 's/option mediaurlbase \/luci-static\/bootstrap/option mediaurlbase \"\/luci-static\/argon\"/g' feeds/luci/modules/luci-base/root/etc/config/luci
 
-## 复制文件
-cp -r "${BUILDER_PATH}/files" ./
+## 复制通用文件，再按目标设备叠加专属文件
+copy_files_overlay "${BUILDER_PATH}/files"
+if target_enabled mediatek_filogic_DEVICE_cudy_tr3000-v1-ubootmod; then
+    echo '应用 Cudy TR3000 专属 LED 配置'
+    copy_files_overlay "${BUILDER_PATH}/device-files/cudy-tr3000"
+fi
 
 if config_enabled luci-app-wechatpush; then
     git clone --depth 1 https://github.com/tty228/luci-app-wechatpush package/new/luci-app-wechatpush
