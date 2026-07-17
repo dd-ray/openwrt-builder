@@ -20,11 +20,23 @@ function use_turboacc() {
 }
 
 function config_enabled() {
-    grep -Eq "^CONFIG_PACKAGE_${1}=y$|^CONFIG_${1}=y$" "$SOURCE_PATH/.config"
+    awk -v package_key="CONFIG_PACKAGE_${1}" -v config_key="CONFIG_${1}" '
+        $0 == package_key "=y" || $0 == config_key "=y" { enabled = 1 }
+        $0 == "# " package_key " is not set" || $0 == "# " config_key " is not set" { enabled = 0 }
+        END { exit enabled ? 0 : 1 }
+    ' "$SOURCE_PATH/.config"
 }
 
 function target_enabled() {
     grep -Eq "^CONFIG_TARGET_${1}=y$" "$SOURCE_PATH/.config"
+}
+
+function copy_files_overlay() {
+    local overlay_path="$1"
+
+    [ -d "$overlay_path" ] || return 0
+    mkdir -p "$SOURCE_PATH/files"
+    cp -a "$overlay_path/." "$SOURCE_PATH/files/"
 }
 
 function default_lan_ip() {
@@ -69,8 +81,12 @@ echo '修改默认主题为argon'
 sed -i 's/config internal themes/config internal themes\n    option Argon  \"\/luci-static\/argon\"/g' feeds/luci/modules/luci-base/root/etc/config/luci
 sed -i 's/option mediaurlbase \/luci-static\/bootstrap/option mediaurlbase \"\/luci-static\/argon\"/g' feeds/luci/modules/luci-base/root/etc/config/luci
 
-## 复制文件
-cp -r "${BUILDER_PATH}/files" ./
+## 复制通用文件，再按目标设备叠加专属文件
+copy_files_overlay "${BUILDER_PATH}/files"
+if target_enabled mediatek_filogic_DEVICE_cudy_tr3000-v1-ubootmod; then
+    echo '应用 Cudy TR3000 专属 LED 配置'
+    copy_files_overlay "${BUILDER_PATH}/device-files/cudy-tr3000"
+fi
 
 if config_enabled luci-app-wechatpush; then
     git clone --depth 1 https://github.com/tty228/luci-app-wechatpush package/new/luci-app-wechatpush
@@ -119,6 +135,10 @@ sed -i 's/--set=llvm\.download-ci-llvm=true/--set=llvm.download-ci-llvm=false/' 
 if config_enabled luci-app-turboacc; then
     use_turboacc
 fi
+# The --no-sfe mode still leaves optional SFE dependencies in some generated
+# luci-app-turboacc Makefiles. Remove them so package index generation stays
+# clean on current OpenWrt branches where these kmods are not present.
+sed -i 's/ +kmod-fast-classifier//g; s/ +kmod-shortcut-fe-cm//g; s/ +kmod-shortcut-fe-drv//g' package/turboacc/luci-app-turboacc/Makefile 2>/dev/null || true
 # 修复 turboacc 的 luci-nginx 依赖
 sed -i 's/+luci +luci-compat/+luci-nginx +luci-compat/g' package/turboacc/luci-app-turboacc/Makefile
 update_luci_app_menu
